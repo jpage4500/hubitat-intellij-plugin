@@ -1,0 +1,33 @@
+plugins {
+    id 'java'
+    id 'org.jetbrains.intellij' version '1.17.3'  // latest version
+}
+
+group 'com.jpage4500'
+version '1.0.0'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.google.code.gson:gson:2.10.1'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+intellij {
+    version = '2023.3'   // or match your installed IDE
+    type = 'IC'          // IC = IntelliJ Community, IU = Ultimate
+    plugins = []         // you can add dependencies here if needed
+}
+
+tasks {
+    patchPluginXml {
+        changeNotes = "Initial release"
+    }
+}

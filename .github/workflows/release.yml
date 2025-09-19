@@ -1,0 +1,49 @@
+###############################################################################
+# Github Actions workflow
+#
+# WHEN: runs on checkin to any branch
+# WHAT: builds jar and create release
+#
+###############################################################################
+name: "Release"
+on:
+   push:
+     branches:
+       - main
+
+jobs:
+  build_app:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build with Gradle
+        run: ./gradlew build
+
+      - name: Get Plugin Version
+        id: get_version
+        run: |
+          VERSION=$(./gradlew properties -q | grep "^version:" | awk '{print $2}')
+          echo "PLUGIN_VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.PLUGIN_VERSION }}
+          generate_release_notes: true
+          files: |
+            build/libs/*.jar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  #endjob build_app

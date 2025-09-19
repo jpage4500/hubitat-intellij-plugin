@@ -1,0 +1,41 @@
+<idea-plugin>
+    <id>com.jpage4500.hubitat</id>
+    <name>Install to Hubitat Hub</name>
+    <version>1.0.0</version>
+    <vendor email="jpage4500@gmail.com">Joe Page</vendor>
+
+    <description>
+        Install App/Driver to Hubitat Hub
+    </description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <applicationService serviceImplementation="com.jpage4500.hubitat.settings.HubitatSettingsState"/>
+
+        <!-- Application-level settings, grouped under Tools -->
+        <applicationConfigurable
+            instance="com.jpage4500.hubitat.settings.HubitatConfigurable"
+            displayName="Hubitat"
+            parentId="tools"/>
+
+        <!-- Console window for logging -->
+        <!--
+                <toolWindow id="Hubitat Console"
+                            anchor="bottom"
+                            factoryClass="com.jpage4500.hubitat.settings.HubitatToolWindowFactory"
+                            icon="icons/icon.png"/>
+        -->
+    </extensions>
+
+    <actions>
+        <action id="HubitatAction"
+                class="com.jpage4500.hubitat.actions.HubitatAction"
+                text="Install"
+                icon="icons/icon.png"
+                description="Install App/Driver to Hubitat Hub">
+            <add-to-group group-id="MainToolbarRight" anchor="last"/>
+        </action>
+    </actions>
+
+</idea-plugin>
