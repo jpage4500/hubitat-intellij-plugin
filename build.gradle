@@ -29,5 +29,7 @@ intellij {
 tasks {
     patchPluginXml {
         changeNotes = "Initial release"
+        sinceBuild = '200.0'
+        untilBuild = '300.*'
     }
 }
