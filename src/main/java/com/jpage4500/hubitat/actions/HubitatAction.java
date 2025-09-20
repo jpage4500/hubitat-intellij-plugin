@@ -1,5 +1,6 @@
 package com.jpage4500.hubitat.actions;
 
+import com.github.weisj.jsvg.T;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.editor.Document;
@@ -44,6 +45,12 @@ public class HubitatAction extends AnAction {
         Document document = editor.getDocument();
         String text = document.getText();
 
+        // check if this looks like a Hubitat app/driver
+        if (!TextUtils.containsIgnoreCase(text, "definition")) {
+            Messages.showWarningDialog(project, "This does not appear to be a Hubitat app or device driver.", TITLE);
+            return;
+        }
+
         // get hub IP, app ID, type (app or device)
         String hubIp = getHubIp(project, text);
         if (TextUtils.isEmpty(hubIp)) return;
@@ -53,7 +60,9 @@ public class HubitatAction extends AnAction {
         if (isApp == null) return;
 
         String appId = getAppId(project, hubIp, isApp, text);
-        if (!TextUtils.isEmpty(appId)) {
+        if (TextUtils.startsWith(appId, "error")) {
+            Messages.showErrorDialog(project, appId, TITLE);
+        } else if (!TextUtils.isEmpty(appId)) {
             updateApp(project, hubIp, isApp, appId, text);
         } else {
             installApp(project, hubIp, isApp, text);
@@ -193,13 +202,14 @@ public class HubitatAction extends AnAction {
         // definition(name: "File Manager Device", namespace: "jpage4500", author: "Joe Page") {
         String name = parseValue(text, "name");
         String namespace = parseValue(text, "namespace");
-        if (TextUtils.isEmptyAny(name, namespace)) return null;
+        if (TextUtils.isEmptyAny(name, namespace)) return "error: name or namespace not found!";
 
         // http://192.168.0.200/hub2/userDeviceTypes
         // http://192.168.0.200/hub2/userAppTypes
         String urlStr = "http://" + hubIp + "/hub2/" + (isApp ? "userAppTypes" : "userDeviceTypes");
 
         String data = NetworkUtils.getRequest(urlStr);
+        if (data == null) return "error: no response from hub";
         List<UserDeviceType> deviceTypeList = GsonHelper.stringToList(data, UserDeviceType.class);
         //     {
         //        "id": 884,
@@ -241,6 +251,7 @@ public class HubitatAction extends AnAction {
             switch (c) {
                 case '\"':
                 case '\'':
+                case ' ':
                     continue;
                 case '\n':
                 case ',':
