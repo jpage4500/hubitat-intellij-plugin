@@ -4,7 +4,10 @@ plugins {
 }
 
 group 'com.jpage4500'
-version '1.0.0'
+
+def now = new Date()
+def versionFormat = now.format('yy.M.d-Hmm')
+version = versionFormat
 
 repositories {
     mavenCentral()
@@ -29,7 +32,7 @@ intellij {
 tasks {
     patchPluginXml {
         changeNotes = "Initial release"
-        sinceBuild = '233.*'
-        untilBuild = '999.*'
+        sinceBuild = '233.0'
+        untilBuild = '233.*'
     }
 }

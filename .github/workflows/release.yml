@@ -1,16 +1,16 @@
 ###############################################################################
 # Github Actions workflow
 #
-# WHEN: runs on checkin to any branch
+# WHEN: runs on checkin to main branch
 # WHAT: builds jar and create release
 #
 ###############################################################################
 name: "Release"
 on:
-    workflow_dispatch:
-#   push:
-#     branches:
-#       - main
+  workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   build_app:

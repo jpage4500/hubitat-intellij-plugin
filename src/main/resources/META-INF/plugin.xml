@@ -4,10 +4,6 @@
     <version>1.0.0</version>
     <vendor email="jpage4500@gmail.com">Joe Page</vendor>
 
-    <description>
-        Install App/Driver to Hubitat Hub
-    </description>
-
     <depends>com.intellij.modules.platform</depends>
 
     <extensions defaultExtensionNs="com.intellij">
