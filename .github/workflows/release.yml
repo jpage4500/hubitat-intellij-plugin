@@ -43,7 +43,7 @@ jobs:
           tag_name: v${{ env.PLUGIN_VERSION }}
           generate_release_notes: true
           files: |
-            build/libs/*.jar
+            build/libs/hubitat-intellij-plugin-*.jar
         env:
           GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 
