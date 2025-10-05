@@ -1,6 +1,8 @@
 package com.jpage4500.hubitat.utils;
 
 import org.apache.commons.lang3.tuple.Pair;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -10,6 +12,8 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
 public class NetworkUtils {
+    private static final Logger log = LoggerFactory.getLogger(NetworkUtils.class);
+
     public static String getRequest(String urlStr) {
         try {
             URL url = new URL(urlStr);
@@ -19,7 +23,7 @@ public class NetworkUtils {
             conn.setReadTimeout(5000);
 
             int status = conn.getResponseCode();
-            Log.debug("getRequest: " + urlStr + ", http:" + status);
+            log.debug("getRequest: " + urlStr + ", http:" + status);
             if (status == 200) {
                 try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
                     StringBuilder sb = new StringBuilder();
@@ -30,10 +34,10 @@ public class NetworkUtils {
                     return sb.toString();
                 }
             } else {
-                Log.error("getRequest: invalid response from hub: " + status);
+                log.error("getRequest: invalid response from hub: " + status);
             }
         } catch (Exception e) {
-            Log.error("getRequest: error connecting to hub: " + urlStr + ", " + e.getMessage());
+            log.error("getRequest: error connecting to hub: " + urlStr + ", " + e.getMessage());
         }
         return null;
     }
@@ -53,7 +57,7 @@ public class NetworkUtils {
             }
 
             int status = conn.getResponseCode();
-            Log.debug("postRequest: " + urlStr + ", http:" + status);
+            log.debug("postRequest: " + urlStr + ", http:" + status);
             try (BufferedReader br = new BufferedReader(
                 new InputStreamReader(status >= 200 && status < 300 ? conn.getInputStream() : conn.getErrorStream(), StandardCharsets.UTF_8))) {
                 StringBuilder response = new StringBuilder();
@@ -64,7 +68,7 @@ public class NetworkUtils {
                 return Pair.of(status, response.toString());
             }
         } catch (Exception e) {
-            Log.error("postRequest: error connecting to hub: " + urlStr + ", " + e.getMessage());
+            log.error("postRequest: error connecting to hub: " + urlStr + ", " + e.getMessage());
         }
         return null;
     }

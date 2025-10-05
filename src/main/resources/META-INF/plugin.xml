@@ -14,14 +14,6 @@
             instance="com.jpage4500.hubitat.settings.HubitatConfigurable"
             displayName="Hubitat"
             parentId="tools"/>
-
-        <!-- Console window for logging -->
-        <!--
-                <toolWindow id="Hubitat Console"
-                            anchor="bottom"
-                            factoryClass="com.jpage4500.hubitat.settings.HubitatToolWindowFactory"
-                            icon="icons/icon.png"/>
-        -->
     </extensions>
 
     <actions>
