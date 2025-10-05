@@ -18,7 +18,7 @@
 
     <actions>
         <action id="HubitatAction"
-                class="com.jpage4500.hubitat.actions.HubitatAction"
+                class="com.jpage4500.hubitat.HubitatAction"
                 text="Install"
                 icon="icons/icon.png"
                 description="Install App/Driver to Hubitat Hub">

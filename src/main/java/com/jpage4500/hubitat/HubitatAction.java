@@ -1,4 +1,4 @@
-package com.jpage4500.hubitat.actions;
+package com.jpage4500.hubitat;
 
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
@@ -12,6 +12,7 @@ import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.jpage4500.hubitat.settings.HubitatInstallDialog;
 import com.jpage4500.hubitat.models.InstallResult;
 import com.jpage4500.hubitat.models.UserDeviceType;
 import com.jpage4500.hubitat.settings.HubitatSettingsState;
@@ -26,6 +27,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
+import com.intellij.openapi.application.ApplicationManager;
+
 public class HubitatAction extends AnAction {
     private static final Logger log = LoggerFactory.getLogger(HubitatAction.class);
 
@@ -39,7 +42,7 @@ public class HubitatAction extends AnAction {
     public void actionPerformed(@NotNull AnActionEvent e) {
         Project project = e.getProject();
         if (project == null) {
-            Messages.showWarningDialog(project, "No active project", TITLE);
+            showWarning(project, "No active project");
             return;
         }
 
@@ -47,7 +50,7 @@ public class HubitatAction extends AnAction {
         Editor editor = FileEditorManager.getInstance(project).getSelectedTextEditor();
         if (editor == null) {
             log.debug("actionPerformed: No active editor");
-            Messages.showWarningDialog(project, "No active editor.", TITLE);
+            showWarning(project, "No active editor.");
             return;
         }
 
@@ -60,16 +63,63 @@ public class HubitatAction extends AnAction {
         // check if this looks like a Hubitat app/driver
         if (!TextUtils.containsIgnoreCase(text, "definition")) {
             log.debug("actionPerformed: invalid app/driver file");
-            Messages.showWarningDialog(project, "This does not appear to be a Hubitat app or device driver.", TITLE);
+            showWarning(project, "This does not appear to be a Hubitat app or device driver.");
             return;
         }
 
-        // get hub IP, app ID, type (app or device)
-        String hubIp = getHubIp(project, text);
-        if (TextUtils.isEmpty(hubIp)) return;
+        // get hub IP from comments:
+        // hub: 192.168.0.200
+        String hubIp = parseValue(text, "hub");
 
+        // get type (app or device) from comments:
+        // type: device
         Boolean isApp = isApp(project, text, document);
-        if (isApp == null) return;
+
+        // If either IP or type is missing, prompt with custom dialog
+        if (TextUtils.isEmpty(hubIp) || isApp == null) {
+            // guess type based on filename
+            VirtualFile file = FileDocumentManager.getInstance().getFile(document);
+            String fileName = file != null ? file.getName() : "";
+            String filePath = file != null ? file.getPath() : "";
+            if (isApp == null && TextUtils.containsIgnoreCase(fileName, "app")) {
+                log.debug("isApp: filename is app: " + fileName);
+                isApp = true;
+            } else if (TextUtils.containsIgnoreCase(fileName, "driver")) {
+                log.debug("isApp: filename is driver: " + fileName);
+                isApp = false;
+            }
+
+            HubitatSettingsState state = HubitatSettingsState.getInstance();
+            if (state != null) {
+                // if IP address not specified, use saved IP address
+                if (TextUtils.isEmpty(hubIp)) {
+                    hubIp = state.hubIp;
+                    log.debug("actionPerformed: cache: {}", hubIp);
+                }
+
+                if (isApp == null) {
+                    // check if we cached this path -> app/driver type
+                    isApp = state.getPathToApp(filePath);
+                    log.debug("actionPerformed: cache: {} -> {}", filePath, isApp);
+                }
+            }
+            HubitatInstallDialog dialog = new HubitatInstallDialog(project, hubIp, isApp);
+            if (!dialog.showAndGet()) return;
+            hubIp = dialog.getIp();
+            isApp = dialog.isApp();
+            if (TextUtils.isEmpty(hubIp)) return;
+            // TODO: validate IP address format
+
+            if (state != null) {
+                // save IP address for future use
+                state.hubIp = hubIp;
+                state.setPathToApp(filePath, isApp);
+            }
+        }
+
+        log.debug("actionPerformed: running with: ip:{}, isApp:{}", hubIp, isApp);
+        final Boolean isAppFinal = isApp;
+        final String hubIpFinal = hubIp;
 
         ProgressManager.getInstance().run(
             new Task.Modal(project, "Install to Hubitat", false) {
@@ -78,23 +128,26 @@ public class HubitatAction extends AnAction {
                     indicator.setIndeterminate(true);
                     indicator.setText("Preparing install/update...");
 
-                    // check if app id is listed in comments
+                    String type = (isAppFinal ? "app" : "driver");
+                    // get app/driver id from comments:
                     // id: 1711
                     String appId = parseValue(text, "id");
                     if (TextUtils.isEmpty(appId)) {
                         // lookup existing app/driver by name/namespace
-                        appId = lookupAppId(hubIp, isApp, text);
+                        indicator.setText("Looking up " + type + " ID...");
+                        appId = lookupAppId(hubIpFinal, isAppFinal, text);
                         if (TextUtils.startsWith(appId, "error")) {
-                            Messages.showErrorDialog(project, appId, TITLE);
+                            showError(project, appId);
+                            return;
                         }
                     }
                     // if app id found, update; else install as a new app/driver
                     if (!TextUtils.isEmpty(appId)) {
-                        indicator.setText("Updating app/device on Hubitat...");
-                        updateApp(project, hubIp, isApp, appId, text);
+                        indicator.setText("Updating " + type + " on Hubitat...");
+                        updateApp(project, hubIpFinal, isAppFinal, appId, text);
                     } else {
-                        indicator.setText("Installing new app/device on Hubitat...");
-                        installApp(project, hubIp, isApp, text);
+                        indicator.setText("Installing " + type + " on Hubitat...");
+                        installApp(project, hubIpFinal, isAppFinal, text);
                     }
                 }
             }
@@ -127,30 +180,23 @@ public class HubitatAction extends AnAction {
             log.debug("isApp: filename is driver: " + fileName);
             return false;
         }
-
-        // check saved settings
-        HubitatSettingsState state = HubitatSettingsState.getInstance();
-        if (state != null) {
-            Boolean isApp = state.getPathToApp(filePath);
-            if (isApp != null) {
-                log.debug("isApp: using cached isApp: " + isApp + " for file: " + filePath);
-                return isApp;
-            }
-        }
-
-        // prompt user for app/driver
-        int rc = Messages.showYesNoCancelDialog(project,
-            "Is this a Hubit app?\n\nSelect 'Yes' for app, 'No' for device driver.",
-            TITLE, Messages.getQuestionIcon());
-        if (rc == Messages.CANCEL) return null;
-        boolean isApp = rc == Messages.YES;
-        log.debug("isApp: user selected isApp: " + isApp + " for file: " + filePath);
-
-        // persist this filename -> app type mapping
-        if (state != null) {
-            state.setPathToApp(filePath, isApp);
-        }
-        return isApp;
+//
+//        // prompt user for app/driver
+//        int result = Messages.showIdeaMessageDialog(project,
+//            "Is this a Hubit app or device driver?",
+//            TITLE,
+//            new String[]{"Cancel", "Device Driver", "App"},
+//            0, // default option index
+//            Messages.getQuestionIcon(),
+//            null
+//        );
+//
+//        // 0 = cancel, 1 = device driver, 2 = app
+//        if (result <= 0) return null;
+//        boolean isApp = result == 2;
+//        log.debug("isApp: user selected isApp: " + isApp + " for file: " + filePath);
+//        return isApp;
+        return null;
     }
 
     private String getHubIp(Project project, String text) {
@@ -164,7 +210,7 @@ public class HubitatAction extends AnAction {
             // use IP from settings
             HubitatSettingsState state = HubitatSettingsState.getInstance();
             if (state == null) return null;
-            else if (TextUtils.isEmpty(state.hubitatIpAddress)) {
+            else if (TextUtils.isEmpty(state.hubIp)) {
                 // Prompt user for IP if not set
                 hubIp = Messages.showInputDialog(project,
                     "Enter Hubitat IP Address:",
@@ -174,9 +220,9 @@ public class HubitatAction extends AnAction {
                 if (TextUtils.isEmpty(hubIp)) return null;
                 log.debug("getHubIp: user input hub IP: " + hubIp);
                 // save for future
-                state.hubitatIpAddress = hubIp;
+                state.hubIp = hubIp;
             } else {
-                hubIp = state.hubitatIpAddress;
+                hubIp = state.hubIp;
             }
         } else {
             log.debug("getHubIp: found hub IP: " + hubIp);
@@ -219,23 +265,21 @@ public class HubitatAction extends AnAction {
 
     private boolean handleResult(Project project, Pair<Integer, String> resultPair, String desc) {
         if (resultPair == null) {
-            Messages.showErrorDialog(project, "No response from hub.", TITLE);
+            showError(project, "No response from hub.");
             return false;
         }
         int status = resultPair.getLeft();
         String message = resultPair.getRight();
-        // {"success":true,"message":null}
         InstallResult result = GsonHelper.fromJson(message, InstallResult.class);
         if (result == null || !result.success) {
             String errorMsg = (result == null) ? "Unknown error" : result.message;
-            Messages.showErrorDialog(project,
-                "Error response from hub: " + status + "\n\n" + errorMsg + "\n\n-- details --\n" + desc,
-                TITLE
+            showError(project,
+                "Error response from hub: " + status + "\n\n" + errorMsg + "\n\n-- details --\n" + desc
             );
             return false;
         }
 
-        Messages.showInfoMessage(project, "Success!\n\n-- details --\n" + desc, TITLE);
+        showInfo(project, "Success!\n\n-- details --\n" + desc);
         return true;
     }
 
@@ -311,4 +355,29 @@ public class HubitatAction extends AnAction {
         log.debug("parseValue: " + key + " = \"" + result + "\"");
         return null;
     }
+
+    private void showInfo(Project project, String message) {
+        if (ApplicationManager.getApplication().isDispatchThread()) {
+            Messages.showInfoMessage(project, message, HubitatAction.TITLE);
+        } else {
+            ApplicationManager.getApplication().invokeLater(() -> showInfo(project, message));
+        }
+    }
+
+    private void showWarning(Project project, String message) {
+        if (ApplicationManager.getApplication().isDispatchThread()) {
+            Messages.showWarningDialog(project, message, HubitatAction.TITLE);
+        } else {
+            ApplicationManager.getApplication().invokeLater(() -> showWarning(project, message));
+        }
+    }
+
+    private void showError(Project project, String message) {
+        if (ApplicationManager.getApplication().isDispatchThread()) {
+            Messages.showErrorDialog(project, message, HubitatAction.TITLE);
+        } else {
+            ApplicationManager.getApplication().invokeLater(() -> showError(project, message));
+        }
+    }
+
 }

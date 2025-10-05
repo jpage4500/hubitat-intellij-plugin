@@ -22,26 +22,26 @@ public class HubitatConfigurable implements Configurable {
     public JComponent createComponent() {
         component = new HubitatSettingsComponent();
         HubitatSettingsState state = HubitatSettingsState.getInstance();
-        component.setIpAddress(state.hubitatIpAddress);
+        component.setIpAddress(state.hubIp);
         return component.getPanel();
     }
 
     @Override
     public boolean isModified() {
         HubitatSettingsState state = HubitatSettingsState.getInstance();
-        return !component.getIpAddress().equals(state.hubitatIpAddress);
+        return !component.getIpAddress().equals(state.hubIp);
     }
 
     @Override
     public void apply() {
         HubitatSettingsState state = HubitatSettingsState.getInstance();
-        state.hubitatIpAddress = component.getIpAddress();
+        state.hubIp = component.getIpAddress();
     }
 
     @Override
     public void reset() {
         HubitatSettingsState state = HubitatSettingsState.getInstance();
-        component.setIpAddress(state.hubitatIpAddress);
+        component.setIpAddress(state.hubIp);
     }
 
     @Override

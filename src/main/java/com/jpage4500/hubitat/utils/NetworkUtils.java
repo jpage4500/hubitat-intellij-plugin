@@ -19,8 +19,8 @@ public class NetworkUtils {
             URL url = new URL(urlStr);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
-            conn.setConnectTimeout(5000);
-            conn.setReadTimeout(5000);
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
 
             int status = conn.getResponseCode();
             log.debug("getRequest: " + urlStr + ", http:" + status);
@@ -48,6 +48,8 @@ public class NetworkUtils {
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "text/plain; utf-8");
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
             conn.setDoOutput(true);
 
             // Send body

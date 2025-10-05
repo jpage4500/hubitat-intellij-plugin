@@ -15,12 +15,11 @@ import java.util.Map;
 )
 public class HubitatSettingsState implements PersistentStateComponent<HubitatSettingsState> {
     // values to be persisted
-    public String hubitatIpAddress = "";
+    public String hubIp = "";
     public Map<String, Boolean> pathToAppMap;
 
     public static HubitatSettingsState getInstance() {
-        return com.intellij.openapi.application.ApplicationManager
-            .getApplication().getService(HubitatSettingsState.class);
+        return com.intellij.openapi.application.ApplicationManager.getApplication().getService(HubitatSettingsState.class);
     }
 
     @Nullable
@@ -31,7 +30,8 @@ public class HubitatSettingsState implements PersistentStateComponent<HubitatSet
 
     @Override
     public void loadState(HubitatSettingsState state) {
-        this.hubitatIpAddress = state.hubitatIpAddress;
+        this.hubIp = state.hubIp;
+        this.pathToAppMap = state.pathToAppMap;
     }
 
     public Boolean getPathToApp(String appName) {
@@ -43,4 +43,5 @@ public class HubitatSettingsState implements PersistentStateComponent<HubitatSet
         if (pathToAppMap == null) pathToAppMap = new HashMap<>();
         pathToAppMap.put(path, isApp);
     }
+
 }
