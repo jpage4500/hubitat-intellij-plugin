@@ -1,0 +1,3 @@
+cd ..
+
+gradlew build runIde
