@@ -21,7 +21,9 @@ import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.intellij.openapi.application.ApplicationManager;
 
@@ -198,23 +200,17 @@ public class HubitatAction extends AnAction {
         // POST http://192.168.0.200/app/saveOrUpdateJson
         String urlStr = "http://" + details.hubIp + (details.isApp ? "/app" : "/device") + "/saveOrUpdateJson";
         if (networkHelper == null) networkHelper = new NetworkHelper();
-        NetworkHelper.HttpResponse response = networkHelper.postRequest(urlStr, details.text);
+        Map<String, String> headers = getHeaders(details);
+        NetworkHelper.HttpResponse response = networkHelper.postRequest(urlStr, details.text, headers);
         return handleResult(dialog, response);
     }
 
     private boolean updateApp(HubitatInstallDialog dialog, DriverDetails details) {
-        // POST /app/ideUpdate?id=885 HTTP/1.1
-        // Content-Length: 4946
-        // Content-Type: text/plain; charset=ISO-8859-1
-        // Host: 192.168.0.200:8080
-        // Connection: Keep-Alive
-        // User-Agent: Apache-HttpClient/4.5.14 (Java/21.0.7)
-        // Accept-Encoding: gzip,deflate
-
         // POST /device/ideUpdate?id=885 HTTP/1.1
         String urlStr = "http://" + details.hubIp + (details.isApp ? "/app" : "/device") + "/ideUpdate?id=" + details.appId;
         if (networkHelper == null) networkHelper = new NetworkHelper();
-        NetworkHelper.HttpResponse response = networkHelper.postRequest(urlStr, details.text);
+        Map<String, String> headers = getHeaders(details);
+        NetworkHelper.HttpResponse response = networkHelper.postRequest(urlStr, details.text, headers);
         return handleResult(dialog, response);
     }
 
@@ -245,7 +241,8 @@ public class HubitatAction extends AnAction {
         String urlStr = "http://" + details.hubIp + "/hub2/" + (details.isApp ? "userAppTypes" : "userDeviceTypes");
 
         if (networkHelper == null) networkHelper = new NetworkHelper();
-        NetworkHelper.HttpResponse response = networkHelper.getRequest(urlStr);
+        Map<String, String> headers = getHeaders(details);
+        NetworkHelper.HttpResponse response = networkHelper.getRequest(urlStr, headers);
         if (response.status != 200) {
             dialog.addResult("❌ " + response.body);
             return false;
@@ -274,6 +271,16 @@ public class HubitatAction extends AnAction {
         log.error("lookupAppId: NOT_FOUND: results:" + deviceTypeList.size() + ", " + GsonHelper.toJson(details));
         // NOTE: not found is not an error
         return true;
+    }
+
+    private Map<String, String> getHeaders(DriverDetails details) {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Content-Type", "text/plain; charset=ISO-8859-1");
+        headers.put("Origin", "http://" + details.hubIp);
+        headers.put("Host", details.hubIp + ":8080");
+        headers.put("User-Agent", "Apache-HttpClient/4.5.14 (Java/21.0.8)");
+        headers.put("Accept-Encoding", "gzip,deflate");
+        return headers;
     }
 
     private String parseValue(String text, String key) {
