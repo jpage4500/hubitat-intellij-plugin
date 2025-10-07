@@ -3,14 +3,16 @@ package com.jpage4500.hubitat.settings;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.jpage4500.hubitat.utils.TextUtils;
-
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
-
 import java.awt.*;
 
 public class HubitatInstallDialog extends DialogWrapper {
+    private static final Logger log = LoggerFactory.getLogger(HubitatInstallDialog.class);
+
     private JTextField ipField;
     private JRadioButton appRadio;
     private JRadioButton driverRadio;
@@ -20,7 +22,7 @@ public class HubitatInstallDialog extends DialogWrapper {
     private InstallListener listener;
 
     public interface InstallListener {
-        boolean onInstall(String selectedIp, boolean selectedIsApp);
+        boolean onInstall(String selectedIp, Boolean selectedIsApp);
     }
 
     public void setListener(InstallListener listener) {
@@ -92,7 +94,6 @@ public class HubitatInstallDialog extends DialogWrapper {
         javax.swing.border.TitledBorder resultsBorder = BorderFactory.createTitledBorder("Results");
         resultsBorder.setTitleFont(resultsBorder.getTitleFont().deriveFont(Font.BOLD));
         resultsScroll.setBorder(resultsBorder);
-        resultsArea.setVisible(false);
         gbc.gridx = 0;
         gbc.gridy = 2;
         gbc.gridwidth = 2;
@@ -112,7 +113,7 @@ public class HubitatInstallDialog extends DialogWrapper {
 
     @Override
     protected @Nullable JComponent createCenterPanel() {
-        panel.setPreferredSize(new Dimension(450, 300)); // wider and taller than default
+        panel.setPreferredSize(new Dimension(450, 300));
         return panel;
     }
 
@@ -120,23 +121,27 @@ public class HubitatInstallDialog extends DialogWrapper {
         return ipField.getText().trim();
     }
 
-    public boolean isApp() {
-        return appRadio.isSelected();
+    public Boolean isApp() {
+        if (appRadio.isSelected()) return true;
+        else if (driverRadio.isSelected()) return false;
+        else return null;
     }
 
-    public void setResults(String text) {
-        resultsArea.setVisible(true);
+    public void setResult(String text) {
         resultsArea.setText(text);
     }
 
     public void addResult(String text) {
-        resultsArea.setVisible(true);
         String results = resultsArea.getText();
         if (!TextUtils.isEmpty(results)) {
             results += "\n";
         }
         results += text;
         resultsArea.setText(results);
+    }
+
+    public void install() {
+        doOKAction();
     }
 
     public void done() {
@@ -152,17 +157,14 @@ public class HubitatInstallDialog extends DialogWrapper {
     @Override
     protected void doOKAction() {
         if (listener != null) {
-            // disable OK button
-            setOKActionEnabled(false);
-            listener.onInstall(getIp(), isApp());
-            done();
+            boolean isOk = listener.onInstall(getIp(), isApp());
+            if (isOk) {
+                // disable OK button
+                setOKActionEnabled(false);
+            }
         } else {
             // close dialog
-            superDoOKAction();
+            super.doOKAction();
         }
-    }
-
-    private void superDoOKAction() {
-        super.doOKAction();
     }
 }

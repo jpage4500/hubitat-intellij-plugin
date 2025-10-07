@@ -1,4 +1,4 @@
-cd ..
+    cd ..
 
 # remove all existing jar files
 echo "removing existing jar files"

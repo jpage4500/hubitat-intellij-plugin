@@ -13,6 +13,7 @@ import com.jpage4500.hubitat.settings.HubitatInstallDialog;
 import com.jpage4500.hubitat.models.InstallResult;
 import com.jpage4500.hubitat.models.UserDeviceType;
 import com.jpage4500.hubitat.settings.HubitatSettingsState;
+import com.jpage4500.hubitat.utils.ExcludeFromSerialization;
 import com.jpage4500.hubitat.utils.GsonHelper;
 import com.jpage4500.hubitat.utils.NetworkHelper;
 import com.jpage4500.hubitat.utils.TextUtils;
@@ -38,27 +39,25 @@ public class HubitatAction extends AnAction {
         super("Install to Hubitat");
     }
 
-    public class DriverDetails {
+    public static class DriverDetails {
         public String name;
         public String namespace;
         public String hubIp;
         public Boolean isApp;
         public String appId;
+        @ExcludeFromSerialization
         public String text;
     }
 
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
         Project project = e.getProject();
-        if (project == null) {
-            showWarning(project, "No active project");
-            return;
-        }
+        if (project == null) return;
 
         // Get contents of current file in editor
         Editor editor = FileEditorManager.getInstance(project).getSelectedTextEditor();
         if (editor == null) {
-            log.debug("actionPerformed: No active editor");
+            log.info("actionPerformed: No active editor");
             showWarning(project, "No active editor.");
             return;
         }
@@ -72,11 +71,11 @@ public class HubitatAction extends AnAction {
         String fileName = file != null ? file.getName() : "";
         String filePath = file != null ? file.getPath() : "";
 
-        log.debug("actionPerformed: " + fileName);
+        log.info("actionPerformed: {}", fileName);
 
         // check if this looks like a Hubitat app/driver
         if (!TextUtils.containsIgnoreCase(details.text, "definition")) {
-            log.debug("actionPerformed: invalid app/driver file");
+            log.info("actionPerformed: invalid app/driver file");
             showWarning(project, "This does not appear to be a Hubitat app or device driver (missing definition).");
             return;
         }
@@ -95,15 +94,15 @@ public class HubitatAction extends AnAction {
 
         // get type (app or device) from comments:
         // type: device
-        details.isApp = isApp(details.text, document);
+        details.isApp = isApp(details.text);
 
         if (details.isApp == null) {
             // guess type based on filename
             if (TextUtils.containsIgnoreCase(fileName, "app")) {
-                log.debug("isApp: filename is app: " + fileName);
+                log.info("isApp: filename is app: {}", fileName);
                 details.isApp = true;
             } else if (TextUtils.containsIgnoreCase(fileName, "driver")) {
-                log.debug("isApp: filename is driver: " + fileName);
+                log.info("isApp: filename is driver: {}", fileName);
                 details.isApp = false;
             }
         }
@@ -113,20 +112,29 @@ public class HubitatAction extends AnAction {
             // if IP address not specified, use saved IP address
             if (TextUtils.isEmpty(details.hubIp)) {
                 details.hubIp = state.hubIp;
-                if (!TextUtils.isEmpty(details.hubIp)) log.debug("actionPerformed: cached IP: {}", details.hubIp);
+                if (!TextUtils.isEmpty(details.hubIp)) log.info("actionPerformed: cached IP: {}", details.hubIp);
             }
 
             if (details.isApp == null) {
                 // check if we cached this path -> app/driver type
                 details.isApp = state.getPathToApp(filePath);
-                if (details.isApp != null) log.debug("actionPerformed: cached isApp: {} -> {}", filePath, details.isApp);
+                if (details.isApp != null) log.info("actionPerformed: cached isApp: {} -> {}", filePath, details.isApp);
             }
         }
 
         HubitatInstallDialog dialog = new HubitatInstallDialog(project, details.hubIp, details.isApp);
         dialog.setListener((selectedIp, selectedIsApp) -> {
-            if (TextUtils.isEmpty(selectedIp)) return false;
-            // TODO: validate IP address format
+            if (selectedIsApp == null) {
+                dialog.addResult("Select an app/driver type to continue");
+                log.warn("app/driver not selected ");
+                return false;
+            } else if (!isValidIp(selectedIp)) {
+                dialog.addResult("Invalid IP address");
+                log.warn("Invalid IP address: {}", selectedIp);
+                return false;
+            }
+            details.hubIp = selectedIp;
+            details.isApp = selectedIsApp;
 
             if (state != null) {
                 // save IP address for future use
@@ -139,22 +147,26 @@ public class HubitatAction extends AnAction {
             // get app/driver id from comments:
             // id: 1711
             details.appId = parseValue(details.text, "id");
-            if (TextUtils.isEmpty(details.appId)) {
-                // lookup existing app/driver by name/namespace
-                dialog.addResult("\uD83D\uDD39 Looking up " + type + " ID for \"" + details.name + "\"...");
-                boolean isOk = lookupAppId(dialog, details);
-                if (!isOk) return false;
-            }
-            // if app id found, update; else install as a new app/driver
-            if (!TextUtils.isEmpty(details.appId)) {
-                dialog.addResult("\uD83D\uDD39 Updating " + type + " on Hubitat...");
-                return updateApp(dialog, details);
-            } else {
-                dialog.addResult("\uD83D\uDD39 Installing " + type + " on Hubitat...");
-                return installApp(dialog, details);
-            }
+
+            // run network requests on background thread
+            new Thread(() -> {
+                if (TextUtils.isEmpty(details.appId)) {
+                    // lookup existing app/driver by name/namespace
+                    dialog.addResult("\uD83D\uDD39 Looking up " + type + " ID for \"" + details.name + "\"...");
+                    lookupAppId(dialog, details);
+                } else {
+                    dialog.addResult("\uD83D\uDD39 Updating " + type + " on Hubitat...");
+                    updateApp(dialog, details);
+                }
+            }).start();
+            return true;
         });
         dialog.show();
+
+        // TODO: start update automatically
+        if (!TextUtils.isEmpty(details.appId)) {
+            //dialog.install();
+        }
     }
 
     /**
@@ -162,25 +174,13 @@ public class HubitatAction extends AnAction {
      *
      * @return true = app, false = device driver, null = unknown/cancel
      */
-    private Boolean isApp(String text, Document document) {
+    private Boolean isApp(String text) {
         String type = parseValue(text, "type");
         if (TextUtils.equalsIgnoreCase(type, "app")) {
-            log.debug("isApp: found type: " + type);
+            log.info("isApp: found type: {}", type);
             return true;
         } else if (TextUtils.equalsIgnoreCase(type, "device")) {
-            log.debug("isApp: found type: " + type);
-            return false;
-        }
-
-        // guess type based on filename
-        VirtualFile file = FileDocumentManager.getInstance().getFile(document);
-        String fileName = file != null ? file.getName() : "";
-        String filePath = file != null ? file.getPath() : "";
-        if (TextUtils.containsIgnoreCase(fileName, "app")) {
-            log.debug("isApp: filename is app: " + fileName);
-            return true;
-        } else if (TextUtils.containsIgnoreCase(fileName, "driver")) {
-            log.debug("isApp: filename is driver: " + fileName);
+            log.info("isApp: found type: {}", type);
             return false;
         }
         return null;
@@ -217,16 +217,19 @@ public class HubitatAction extends AnAction {
     private boolean handleResult(HubitatInstallDialog dialog, NetworkHelper.HttpResponse response) {
         if (response.status != 200) {
             dialog.addResult("❌ " + response.body);
+            dialog.done();
             return false;
         }
         InstallResult result = GsonHelper.fromJson(response.body, InstallResult.class);
         if (result == null || !result.success) {
             String errorMsg = (result == null) ? "Unknown error" : result.message;
             dialog.addResult("❌ Error: " + errorMsg);
+            dialog.done();
             return false;
         }
 
         dialog.addResult("✅ Success!");
+        dialog.done();
         return true;
     }
 
@@ -262,14 +265,17 @@ public class HubitatAction extends AnAction {
             if (TextUtils.equals(deviceType.name, details.name) &&
                 TextUtils.equals(deviceType.namespace, details.namespace)) {
                 dialog.addResult("\uD83D\uDD39 Found " + type + " ID: " + deviceType.id);
-                log.debug("lookupAppId: FOUND: " + GsonHelper.toJson(deviceType));
+                log.info("lookupAppId: FOUND: {}", GsonHelper.toJson(deviceType));
                 details.appId = String.valueOf(deviceType.id);
+                updateApp(dialog, details);
                 return true;
             }
         }
         dialog.addResult("❌ " + type + " " + details.name + " not found");
-        log.error("lookupAppId: NOT_FOUND: results:" + deviceTypeList.size() + ", " + GsonHelper.toJson(details));
-        // NOTE: not found is not an error
+        log.error("lookupAppId: NOT_FOUND: results:{}, {}", deviceTypeList.size(), GsonHelper.toJson(details));
+
+        dialog.addResult("\uD83D\uDD39 Installing " + type + " on Hubitat...");
+        installApp(dialog, details);
         return true;
     }
 
@@ -308,7 +314,7 @@ public class HubitatAction extends AnAction {
                 case ')':
                     // remove spaces from beginning/end
                     String resultStr = result.toString().trim();
-                    log.debug("parseValue: " + key + " = \"" + resultStr + "\"");
+                    log.info("parseValue: " + key + " = \"" + resultStr + "\"");
                     return resultStr;
                 default:
                     result.append(c);
@@ -318,7 +324,7 @@ public class HubitatAction extends AnAction {
                     }
             }
         }
-        log.debug("parseValue: " + key + " = \"" + result + "\"");
+        log.info("parseValue: {} = \"{}\"", key, result);
         return null;
     }
 
@@ -344,6 +350,17 @@ public class HubitatAction extends AnAction {
         } else {
             ApplicationManager.getApplication().invokeLater(() -> showError(project, message));
         }
+    }
+
+    private static boolean isValidIp(String ip) {
+        if (ip == null || ip.isEmpty()) return false;
+        // IPv4 regex
+        String ipv4Pattern =
+            "^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\." +
+                "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\." +
+                "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\." +
+                "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$";
+        return ip.matches(ipv4Pattern);
     }
 
 }

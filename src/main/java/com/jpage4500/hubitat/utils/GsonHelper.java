@@ -31,6 +31,7 @@ public class GsonHelper {
     public static Gson newInstance() {
         GsonBuilder gsonBuilder = gsonBuilder();
         // converts between file_name to fileName
+        gsonBuilder.setExclusionStrategies(new AnnotationExclusionStrategy());
         gsonBuilder.setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES);
         return gsonBuilder.create();
     }

@@ -8,12 +8,6 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <applicationService serviceImplementation="com.jpage4500.hubitat.settings.HubitatSettingsState"/>
-
-        <!-- Application-level settings, grouped under Tools -->
-        <applicationConfigurable
-            instance="com.jpage4500.hubitat.settings.HubitatConfigurable"
-            displayName="Hubitat"
-            parentId="tools"/>
     </extensions>
 
     <actions>
