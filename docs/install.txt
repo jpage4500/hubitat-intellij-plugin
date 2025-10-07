@@ -1,0 +1,30 @@
+METHOD: POST
+URL
+http://192.168.0.200/app/saveOrUpdateJson
+HEADERS
+Accept: */*
+Accept-Encoding: gzip, deflate
+Accept-Language: en-US,en;q=0.9
+Content-Length: 396
+Content-Type: application/json
+Cookie: HUBSESSION=node0o9b93fqdzd8huk0606ajr80d28.node0
+Host: 192.168.0.200
+Origin: http://192.168.0.200
+Referer: http://192.168.0.200/app/create
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36
+
+{
+  "source": "metadata {\n    definition (\n        name: \"Test 1\",\n        namespace: \"jpage4500\",\n        author: \"Joe Page\",\n        importUrl: \"https://raw.githubusercontent.com/jpage4500/hubitat-drivers/master/hd-tile/hd-tile.groovy\"\n    ) {\n        capability \"TemperatureMeasurement\"\n    }\n}\n\npreferences {\n}\n\ndef installed() {\n}\n\ndef updated() {\n}\n\n",
+  "version": 1
+}
+
+STATUS: 200 OK
+HEADERS
+Content-Type: application/json
+Date: Tue, 07 Oct 2025 01:37:03 GMT
+Transfer-Encoding: chunked
+
+{
+  "success": false,
+  "message": "Metadata Error:Please check if you inadvertently pasted driver code into apps code window on line <span id='errorLine'>1</span>"
+}
