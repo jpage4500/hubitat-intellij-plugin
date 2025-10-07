@@ -14,7 +14,7 @@ Referer: http://192.168.0.200/app/create
 User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36
 
 {
-  "source": "metadata {\n    definition (\n        name: \"Test 1\",\n        namespace: \"jpage4500\",\n        author: \"Joe Page\",\n        importUrl: \"https://raw.githubusercontent.com/jpage4500/hubitat-drivers/master/hd-tile/hd-tile.groovy\"\n    ) {\n        capability \"TemperatureMeasurement\"\n    }\n}\n\npreferences {\n}\n\ndef installed() {\n}\n\ndef updated() {\n}\n\n",
+  "source": "CODE HERE",
   "version": 1
 }
 
