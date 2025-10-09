@@ -2,6 +2,7 @@ package com.jpage4500.hubitat;
 
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
@@ -9,15 +10,15 @@ import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.jpage4500.hubitat.settings.HubitatInstallDialog;
+import com.jpage4500.hubitat.models.InstallRequest;
 import com.jpage4500.hubitat.models.InstallResult;
 import com.jpage4500.hubitat.models.UserDeviceType;
+import com.jpage4500.hubitat.settings.HubitatInstallDialog;
 import com.jpage4500.hubitat.settings.HubitatSettingsState;
 import com.jpage4500.hubitat.utils.ExcludeFromSerialization;
 import com.jpage4500.hubitat.utils.GsonHelper;
 import com.jpage4500.hubitat.utils.NetworkHelper;
 import com.jpage4500.hubitat.utils.TextUtils;
-
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,8 +26,6 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import com.intellij.openapi.application.ApplicationManager;
 
 public class HubitatAction extends AnAction {
     private static final Logger log = LoggerFactory.getLogger(HubitatAction.class);
@@ -57,7 +56,7 @@ public class HubitatAction extends AnAction {
         // Get contents of current file in editor
         Editor editor = FileEditorManager.getInstance(project).getSelectedTextEditor();
         if (editor == null) {
-            log.info("actionPerformed: No active editor");
+            log.error("actionPerformed: No active editor");
             showWarning(project, "No active editor.");
             return;
         }
@@ -71,11 +70,11 @@ public class HubitatAction extends AnAction {
         String fileName = file != null ? file.getName() : "";
         String filePath = file != null ? file.getPath() : "";
 
-        log.info("actionPerformed: {}", fileName);
+        log.debug("actionPerformed: {}", fileName);
 
         // check if this looks like a Hubitat app/driver
         if (!TextUtils.containsIgnoreCase(details.text, "definition")) {
-            log.info("actionPerformed: invalid app/driver file");
+            log.error("actionPerformed: invalid app/driver file");
             showWarning(project, "This does not appear to be a Hubitat app or device driver (missing definition).");
             return;
         }
@@ -99,10 +98,10 @@ public class HubitatAction extends AnAction {
         if (details.isApp == null) {
             // guess type based on filename
             if (TextUtils.containsIgnoreCase(fileName, "app")) {
-                log.info("isApp: filename is app: {}", fileName);
+                log.debug("isApp: filename is app: {}", fileName);
                 details.isApp = true;
             } else if (TextUtils.containsIgnoreCase(fileName, "driver")) {
-                log.info("isApp: filename is driver: {}", fileName);
+                log.debug("isApp: filename is driver: {}", fileName);
                 details.isApp = false;
             }
         }
@@ -112,13 +111,13 @@ public class HubitatAction extends AnAction {
             // if IP address not specified, use saved IP address
             if (TextUtils.isEmpty(details.hubIp)) {
                 details.hubIp = state.hubIp;
-                if (!TextUtils.isEmpty(details.hubIp)) log.info("actionPerformed: cached IP: {}", details.hubIp);
+                if (!TextUtils.isEmpty(details.hubIp)) log.debug("actionPerformed: cached IP: {}", details.hubIp);
             }
 
             if (details.isApp == null) {
                 // check if we cached this path -> app/driver type
                 details.isApp = state.getPathToApp(filePath);
-                if (details.isApp != null) log.info("actionPerformed: cached isApp: {} -> {}", filePath, details.isApp);
+                if (details.isApp != null) log.debug("actionPerformed: cached isApp: {} -> {}", filePath, details.isApp);
             }
         }
 
@@ -177,12 +176,24 @@ public class HubitatAction extends AnAction {
     private Boolean isApp(String text) {
         String type = parseValue(text, "type");
         if (TextUtils.equalsIgnoreCase(type, "app")) {
-            log.info("isApp: found type: {}", type);
+            log.debug("isApp: found type: {}", type);
             return true;
         } else if (TextUtils.equalsIgnoreCase(type, "device")) {
-            log.info("isApp: found type: {}", type);
+            log.debug("isApp: found type: {}", type);
             return false;
         }
+
+        // Driver: Contains a metadata block with definition, and usually declares capability, attribute, and command.
+        // App: Contains a definition block (not inside metadata), and often uses app, section, and input for user configuration.
+        //   - Apps do not use the capability keyword
+        if (TextUtils.containsAny(text, true, "capability", "metadata")) {
+            // drivers contain capability/metadata keywords
+            log.debug("isApp: contains capability/metadata");
+            return false;
+        } else if (TextUtils.containsAny(text, true, "definition", "section", "page")) {
+            return true;
+        }
+        // unknown
         return null;
     }
 
@@ -195,19 +206,37 @@ public class HubitatAction extends AnAction {
 //            TITLE, Messages.getQuestionIcon());
 //        if (rc != Messages.YES) return false;
 
+        String type = details.isApp ? "/app" : "/driver";
+        String createUrl = "http://" + details.hubIp + type + "/create";
+        if (networkHelper == null) networkHelper = new NetworkHelper();
+        networkHelper.getRequest(createUrl, getHeaders(details));
+
         // install new app/driver
         // POST http://192.168.0.200/driver/saveOrUpdateJson
         // POST http://192.168.0.200/app/saveOrUpdateJson
-        String urlStr = "http://" + details.hubIp + (details.isApp ? "/app" : "/device") + "/saveOrUpdateJson";
-        if (networkHelper == null) networkHelper = new NetworkHelper();
-        Map<String, String> headers = getHeaders(details);
-        NetworkHelper.HttpResponse response = networkHelper.postRequest(urlStr, details.text, headers);
+        String urlStr = "http://" + details.hubIp + type + "/saveOrUpdateJson";
+
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Accept", "*/*");
+        headers.put("Accept-Encoding", "gzip, deflate");
+        headers.put("Accept-Language", "en-US,en;q=0.9");
+        headers.put("Content-Type", "application/json");
+        headers.put("Host", details.hubIp);
+        headers.put("Origin", "http://" + details.hubIp);
+        headers.put("Referer", createUrl);
+        headers.put("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36");
+
+        InstallRequest request = new InstallRequest();
+        request.source = details.text;
+
+        NetworkHelper.HttpResponse response = networkHelper.postRequest(urlStr, GsonHelper.toJson(request), headers);
         return handleResult(dialog, response);
     }
 
     private boolean updateApp(HubitatInstallDialog dialog, DriverDetails details) {
         // POST /device/ideUpdate?id=885 HTTP/1.1
-        String urlStr = "http://" + details.hubIp + (details.isApp ? "/app" : "/device") + "/ideUpdate?id=" + details.appId;
+        String type = details.isApp ? "/app" : "/device";
+        String urlStr = "http://" + details.hubIp + type + "/ideUpdate?id=" + details.appId;
         if (networkHelper == null) networkHelper = new NetworkHelper();
         Map<String, String> headers = getHeaders(details);
         NetworkHelper.HttpResponse response = networkHelper.postRequest(urlStr, details.text, headers);
@@ -271,7 +300,7 @@ public class HubitatAction extends AnAction {
                 return true;
             }
         }
-        dialog.addResult("❌ " + type + " " + details.name + " not found");
+        dialog.addResult("❌ \"" + details.name + "\" not found");
         log.error("lookupAppId: NOT_FOUND: results:{}, {}", deviceTypeList.size(), GsonHelper.toJson(details));
 
         dialog.addResult("\uD83D\uDD39 Installing " + type + " on Hubitat...");
@@ -314,7 +343,7 @@ public class HubitatAction extends AnAction {
                 case ')':
                     // remove spaces from beginning/end
                     String resultStr = result.toString().trim();
-                    log.info("parseValue: " + key + " = \"" + resultStr + "\"");
+                    log.debug("parseValue: " + key + " = \"" + resultStr + "\"");
                     return resultStr;
                 default:
                     result.append(c);
@@ -324,16 +353,8 @@ public class HubitatAction extends AnAction {
                     }
             }
         }
-        log.info("parseValue: {} = \"{}\"", key, result);
+        log.debug("parseValue: {} = \"{}\"", key, result);
         return null;
-    }
-
-    private void showInfo(Project project, String message) {
-        if (ApplicationManager.getApplication().isDispatchThread()) {
-            Messages.showInfoMessage(project, message, HubitatAction.TITLE);
-        } else {
-            ApplicationManager.getApplication().invokeLater(() -> showInfo(project, message));
-        }
     }
 
     private void showWarning(Project project, String message) {
@@ -341,14 +362,6 @@ public class HubitatAction extends AnAction {
             Messages.showWarningDialog(project, message, HubitatAction.TITLE);
         } else {
             ApplicationManager.getApplication().invokeLater(() -> showWarning(project, message));
-        }
-    }
-
-    private void showError(Project project, String message) {
-        if (ApplicationManager.getApplication().isDispatchThread()) {
-            Messages.showErrorDialog(project, message, HubitatAction.TITLE);
-        } else {
-            ApplicationManager.getApplication().invokeLater(() -> showError(project, message));
         }
     }
 

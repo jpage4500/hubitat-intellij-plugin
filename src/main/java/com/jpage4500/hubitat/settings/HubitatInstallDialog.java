@@ -4,15 +4,11 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.jpage4500.hubitat.utils.TextUtils;
 import org.jetbrains.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import java.awt.*;
 
 public class HubitatInstallDialog extends DialogWrapper {
-    private static final Logger log = LoggerFactory.getLogger(HubitatInstallDialog.class);
-
     private JTextField ipField;
     private JRadioButton appRadio;
     private JRadioButton driverRadio;

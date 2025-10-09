@@ -46,7 +46,7 @@ public class NetworkHelper {
             storeCookies(conn.getHeaderFields());
             // http:302 has no body
             if (conn.getContentLength() == 0) {
-                log.trace("getRequest: no body");
+                log.debug("getRequest: no body");
                 return response;
             }
 
@@ -59,7 +59,7 @@ public class NetworkHelper {
                 }
                 response.body = sb.toString();
             }
-            log.trace("getRequest: GOT: {}", response.body.length());
+            log.debug("getRequest: GOT: {}", response.body.length());
         } catch (Exception e) {
             log.error("getRequest: error connecting to hub: {}, {}", urlStr, e.getMessage());
             response.status = -1;
@@ -122,7 +122,7 @@ public class NetworkHelper {
             if (response.status != 200) {
                 log.error("postRequest: http:{}: {}", response.status, response.body);
             } else {
-                log.error("postRequest: OK: {}", response.body);
+                log.debug("postRequest: OK: {}", response.body);
             }
         } catch (Exception e) {
             log.error("postRequest: error connecting to hub: {}, {}", urlStr, e.getMessage());
@@ -136,7 +136,7 @@ public class NetworkHelper {
         // Set request headers if provided
         boolean hasReferer = false;
         if (headers != null) {
-            //log.trace("addHeaders: {}", GsonHelper.toJson(headers));
+            log.debug("addHeaders: {}", GsonHelper.toJson(headers));
             for (Map.Entry<String, String> entry : headers.entrySet()) {
                 String key = entry.getKey();
                 if ("Referer".equalsIgnoreCase(key)) {
@@ -157,7 +157,7 @@ public class NetworkHelper {
         // Add cookies if present
         String cookieHeader = getCookieHeader();
         if (cookieHeader != null) {
-            //log.trace("addCookies: cookie: " + cookieHeader);
+            log.debug("addCookies: cookie: " + cookieHeader);
             conn.setRequestProperty("Cookie", cookieHeader);
         }
     }
@@ -172,7 +172,7 @@ public class NetworkHelper {
                 if (eq > 0) {
                     String name = cookie.substring(0, eq).trim();
                     String value = semi > eq ? cookie.substring(eq + 1, semi) : cookie.substring(eq + 1);
-                    //log.trace("storeCookies: name: {}, value: {}", name, value);
+                    log.debug("storeCookies: name: {}, value: {}", name, value);
                     cookieStore.put(name, value);
                 }
             }
