@@ -153,11 +153,9 @@ public class HubitatAction extends AnAction {
                 if (TextUtils.isEmpty(details.appId)) {
                     // lookup existing app/driver by name/namespace
                     log.debug("actionPerformed: looking up ID: {}", GsonHelper.toJson(details));
-                    dialog.addResult("\uD83D\uDD39 Looking up " + type + " ID for \"" + details.name + "\"...");
                     lookupAppId(dialog, details);
                 } else {
                     log.debug("actionPerformed: updating: {}", GsonHelper.toJson(details));
-                    dialog.addResult("\uD83D\uDD39 Updating " + type + " on Hubitat...");
                     updateApp(dialog, details);
                 }
             }).start();
@@ -238,8 +236,10 @@ public class HubitatAction extends AnAction {
     }
 
     private boolean updateApp(HubitatInstallDialog dialog, DriverDetails details) {
-        // POST /device/ideUpdate?id=885 HTTP/1.1
         String type = details.isApp ? "/app" : "/device";
+        dialog.addResult("\uD83D\uDD39 Updating " + type + " on Hubitat...");
+
+        // POST /device/ideUpdate?id=885 HTTP/1.1
         String urlStr = "http://" + details.hubIp + type + "/ideUpdate?id=" + details.appId;
         if (networkHelper == null) networkHelper = new NetworkHelper();
         Map<String, String> headers = getHeaders(details);
@@ -276,6 +276,9 @@ public class HubitatAction extends AnAction {
         // http://192.168.0.200/hub2/userAppTypes
         String urlStr = "http://" + details.hubIp + "/hub2/" + (details.isApp ? "userAppTypes" : "userDeviceTypes");
 
+        String type = (details.isApp ? "app" : "driver");
+        dialog.addResult("\uD83D\uDD39 Looking up " + type + " ID for \"" + details.name + "\"...");
+
         if (networkHelper == null) networkHelper = new NetworkHelper();
         Map<String, String> headers = getHeaders(details);
         NetworkHelper.HttpResponse response = networkHelper.getRequest(urlStr, headers);
@@ -283,7 +286,6 @@ public class HubitatAction extends AnAction {
             dialog.addResult("❌ " + response.body);
             return false;
         }
-        String type = (details.isApp ? "app" : "driver");
 
         List<UserDeviceType> deviceTypeList = GsonHelper.stringToList(response.body, UserDeviceType.class);
         //     {
