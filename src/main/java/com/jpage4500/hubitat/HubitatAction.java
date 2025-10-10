@@ -146,14 +146,17 @@ public class HubitatAction extends AnAction {
             // get app/driver id from comments:
             // id: 1711
             details.appId = parseValue(details.text, "id");
+            log.debug("actionPerformed: GO: {}", GsonHelper.toJson(details));
 
             // run network requests on background thread
             new Thread(() -> {
                 if (TextUtils.isEmpty(details.appId)) {
                     // lookup existing app/driver by name/namespace
+                    log.debug("actionPerformed: looking up ID: {}", GsonHelper.toJson(details));
                     dialog.addResult("\uD83D\uDD39 Looking up " + type + " ID for \"" + details.name + "\"...");
                     lookupAppId(dialog, details);
                 } else {
+                    log.debug("actionPerformed: updating: {}", GsonHelper.toJson(details));
                     dialog.addResult("\uD83D\uDD39 Updating " + type + " on Hubitat...");
                     updateApp(dialog, details);
                 }
@@ -176,10 +179,10 @@ public class HubitatAction extends AnAction {
     private Boolean isApp(String text) {
         String type = parseValue(text, "type");
         if (TextUtils.equalsIgnoreCase(type, "app")) {
-            log.debug("isApp: found type: {}", type);
+            log.debug("isApp: type=app");
             return true;
         } else if (TextUtils.equalsIgnoreCase(type, "device")) {
-            log.debug("isApp: found type: {}", type);
+            log.debug("isApp: type=device");
             return false;
         }
 
@@ -188,9 +191,10 @@ public class HubitatAction extends AnAction {
         //   - Apps do not use the capability keyword
         if (TextUtils.containsAny(text, true, "capability", "metadata")) {
             // drivers contain capability/metadata keywords
-            log.debug("isApp: contains capability/metadata");
+            log.debug("isApp: type=app (capability/metadata)");
             return false;
         } else if (TextUtils.containsAny(text, true, "definition", "section", "page")) {
+            log.debug("isApp: type=app (definition/etc)");
             return true;
         }
         // unknown
