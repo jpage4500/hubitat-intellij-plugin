@@ -43,7 +43,7 @@ public class HubitatAction extends AnAction {
         public String namespace;
         public String hubIp;
         public Boolean isApp;
-        public String appId;
+        public Integer appId;
         @ExcludeFromSerialization
         public String text;
     }
@@ -145,12 +145,16 @@ public class HubitatAction extends AnAction {
             String type = (selectedIsApp ? "app" : "driver");
             // get app/driver id from comments:
             // id: 1711
-            details.appId = parseValue(details.text, "id");
+            String idStr = parseValue(details.text, "id");
+            if (TextUtils.notEmpty(idStr)) {
+                int id = TextUtils.getNumberInt(idStr, 0);
+                if (id > 0) details.appId = id;
+            }
             log.debug("actionPerformed: GO: {}", GsonHelper.toJson(details));
 
             // run network requests on background thread
             new Thread(() -> {
-                if (TextUtils.isEmpty(details.appId)) {
+                if (details.appId == null || details.appId <= 0) {
                     // lookup existing app/driver by name/namespace
                     log.debug("actionPerformed: looking up ID: {}", GsonHelper.toJson(details));
                     lookupAppId(dialog, details);
@@ -162,11 +166,6 @@ public class HubitatAction extends AnAction {
             return true;
         });
         dialog.show();
-
-        // TODO: start update automatically
-        if (!TextUtils.isEmpty(details.appId)) {
-            //dialog.install();
-        }
     }
 
     /**
@@ -237,7 +236,7 @@ public class HubitatAction extends AnAction {
 
     private boolean updateApp(HubitatInstallDialog dialog, DriverDetails details) {
         String type = details.isApp ? "/app" : "/device";
-        dialog.addResult("\uD83D\uDD39 Updating " + type + " on Hubitat...");
+        dialog.addResult("\uD83D\uDD39 Updating " + (details.isApp ? "app" : "device") + " on Hubitat...");
 
         // POST /device/ideUpdate?id=885 HTTP/1.1
         String urlStr = "http://" + details.hubIp + type + "/ideUpdate?id=" + details.appId;
@@ -301,7 +300,7 @@ public class HubitatAction extends AnAction {
                 TextUtils.equals(deviceType.namespace, details.namespace)) {
                 dialog.addResult("\uD83D\uDD39 Found " + type + " ID: " + deviceType.id);
                 log.info("lookupAppId: FOUND: {}", GsonHelper.toJson(deviceType));
-                details.appId = String.valueOf(deviceType.id);
+                details.appId = deviceType.id;
                 updateApp(dialog, details);
                 return true;
             }
@@ -334,7 +333,7 @@ public class HubitatAction extends AnAction {
         //    namespace: "jpage4500",
         //    oauth: true,
         //    iconUrl: '',
-        int index = text.indexOf(key + ":");
+        int index = text.indexOf(" " + key + ":");
         if (index < 0) return null;
         int start = index + key.length() + 1;
         StringBuilder result = new StringBuilder();
