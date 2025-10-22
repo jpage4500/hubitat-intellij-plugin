@@ -333,9 +333,10 @@ public class HubitatAction extends AnAction {
         //    namespace: "jpage4500",
         //    oauth: true,
         //    iconUrl: '',
-        int index = text.indexOf(" " + key + ":");
+        String fullKey = " " + key + ": ";
+        int index = text.indexOf(fullKey);
         if (index < 0) return null;
-        int start = index + key.length() + 1;
+        int start = index + fullKey.length();
         StringBuilder result = new StringBuilder();
         for (int i = start; i < text.length(); i++) {
             char c = text.charAt(i);
