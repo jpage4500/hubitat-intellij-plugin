@@ -333,7 +333,7 @@ public class HubitatAction extends AnAction {
         //    namespace: "jpage4500",
         //    oauth: true,
         //    iconUrl: '',
-        String fullKey = " " + key + ": ";
+        String fullKey = key + ": ";
         int index = text.indexOf(fullKey);
         if (index < 0) return null;
         int start = index + fullKey.length();
