@@ -117,7 +117,8 @@ public class HubitatAction extends AnAction {
             if (details.isApp == null) {
                 // check if we cached this path -> app/driver type
                 details.isApp = state.getPathToApp(filePath);
-                if (details.isApp != null) log.debug("actionPerformed: cached isApp: {} -> {}", filePath, details.isApp);
+                if (details.isApp != null)
+                    log.debug("actionPerformed: cached isApp: {} -> {}", filePath, details.isApp);
             }
         }
 
@@ -174,6 +175,12 @@ public class HubitatAction extends AnAction {
      * @return true = app, false = device driver, null = unknown/cancel
      */
     private Boolean isApp(String text) {
+        // look for Hubitat header (optional):
+        // hubitat start
+        // hub: 192.168.0.200
+        // type: app
+        // id: 684
+        // hubitat end
         String type = parseValue(text, "type");
         if (TextUtils.equalsIgnoreCase(type, "app")) {
             log.debug("isApp: type=app");
@@ -184,14 +191,16 @@ public class HubitatAction extends AnAction {
         }
 
         // Driver: Contains a metadata block with definition, and usually declares capability, attribute, and command.
+        // capability "Actuator"
         // App: Contains a definition block (not inside metadata), and often uses app, section, and input for user configuration.
         //   - Apps do not use the capability keyword
-        if (TextUtils.containsAny(text, true, "capability", "metadata")) {
+        //
+        if (TextUtils.containsAny(text, true, "capability ", "metadata ")) {
             // drivers contain capability/metadata keywords
             log.debug("isApp: type=app (capability/metadata)");
             return false;
-        } else if (TextUtils.containsAny(text, true, "definition", "section", "page")) {
-            log.debug("isApp: type=app (definition/etc)");
+        } else if (TextUtils.containsAny(text, true, "section", "page")) {
+            log.debug("isApp: type=app (section/page)");
             return true;
         }
         // unknown
@@ -297,7 +306,7 @@ public class HubitatAction extends AnAction {
         //    },
         for (UserDeviceType deviceType : deviceTypeList) {
             if (TextUtils.equals(deviceType.name, details.name) &&
-                TextUtils.equals(deviceType.namespace, details.namespace)) {
+                    TextUtils.equals(deviceType.namespace, details.namespace)) {
                 dialog.addResult("\uD83D\uDD39 Found " + type + " ID: " + deviceType.id);
                 log.info("lookupAppId: FOUND: {}", GsonHelper.toJson(deviceType));
                 details.appId = deviceType.id;
@@ -335,7 +344,10 @@ public class HubitatAction extends AnAction {
         //    iconUrl: '',
         String fullKey = key + ": ";
         int index = text.indexOf(fullKey);
-        if (index < 0) return null;
+        if (index < 0) {
+            log.debug("parseValue: key not found: {}", key);
+            return null;
+        }
         int start = index + fullKey.length();
         StringBuilder result = new StringBuilder();
         for (int i = start; i < text.length(); i++) {
@@ -375,10 +387,10 @@ public class HubitatAction extends AnAction {
         if (ip == null || ip.isEmpty()) return false;
         // IPv4 regex
         String ipv4Pattern =
-            "^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\." +
-                "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\." +
-                "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\." +
-                "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$";
+                "^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\." +
+                        "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\." +
+                        "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\." +
+                        "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$";
         return ip.matches(ipv4Pattern);
     }
 
