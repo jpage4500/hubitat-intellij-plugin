@@ -26,13 +26,32 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class HubitatAction extends AnAction {
     private static final Logger log = LoggerFactory.getLogger(HubitatAction.class);
 
     private static final String TITLE = "Hubitat Plugin";
 
-    private NetworkHelper networkHelper;
+    /** longest value parseValue() will accept (name, namespace, ip, id, ..) */
+    private static final int MAX_VALUE_LENGTH = 256;
+
+    /** matches "definition(" and "definition (" - the app/driver header block */
+    private static final Pattern DEFINITION_PATTERN = Pattern.compile("\\bdefinition\\s*\\(");
+
+    /** driver-only keywords: capability "Switch", metadata { .. } */
+    private static final Pattern DRIVER_PATTERN = Pattern.compile("\\bcapability\\s+[\"']|\\bmetadata\\s*\\{");
+
+    /**
+     * app-only keywords: page(..), dynamicPage(..), section(..)
+     * NOTE: must be anchored - a bare "page" substring matches namespaces like "jpage4500"
+     */
+    private static final Pattern APP_PATTERN = Pattern.compile("\\b(?:dynamicP|p)age\\s*\\(|\\bsection\\s*[({\"']");
+
+    /** cache of key -> pattern used by parseValue() */
+    private static final Map<String, Pattern> keyPatternMap = new ConcurrentHashMap<>();
 
     public HubitatAction() {
         super("Install to Hubitat");
@@ -46,6 +65,9 @@ public class HubitatAction extends AnAction {
         public Integer appId;
         @ExcludeFromSerialization
         public String text;
+        // NOTE: not shared between runs - the HUBSESSION cookie is tied to a single hub
+        @ExcludeFromSerialization
+        public NetworkHelper networkHelper;
     }
 
     @Override
@@ -73,15 +95,18 @@ public class HubitatAction extends AnAction {
         log.debug("actionPerformed: {}", fileName);
 
         // check if this looks like a Hubitat app/driver
-        if (!TextUtils.containsIgnoreCase(details.text, "definition")) {
+        // definition(name: "File Manager Device", namespace: "jpage4500", author: "Joe Page") {
+        String definition = parseDefinition(details.text);
+        if (definition == null) {
             log.error("actionPerformed: invalid app/driver file");
             showWarning(project, "This does not appear to be a Hubitat app or device driver (missing definition).");
             return;
         }
 
-        // definition(name: "File Manager Device", namespace: "jpage4500", author: "Joe Page") {
-        details.name = parseValue(details.text, "name");
-        details.namespace = parseValue(details.text, "namespace");
+        // NOTE: only look *inside* definition(..) - files often contain unrelated "name:" values
+        // eg: @Field static final Map APPS = ["com.netflix.ninja": [name: "Netflix"], ..]
+        details.name = parseValue(definition, "name");
+        details.namespace = parseValue(definition, "namespace");
         if (TextUtils.isEmptyAny(details.name, details.namespace)) {
             showWarning(project, "This does not appear to be a Hubitat app or device driver (missing name/namespace).");
             return;
@@ -89,7 +114,7 @@ public class HubitatAction extends AnAction {
 
         // get hub IP from comments:
         // hub: 192.168.0.200
-        details.hubIp = parseValue(details.text, "hub");
+        details.hubIp = parseComment(details.text, "hub");
 
         // get type (app or device) from comments:
         // type: device
@@ -97,12 +122,13 @@ public class HubitatAction extends AnAction {
 
         if (details.isApp == null) {
             // guess type based on filename
-            if (TextUtils.containsIgnoreCase(fileName, "app")) {
-                log.debug("isApp: filename is app: {}", fileName);
-                details.isApp = true;
-            } else if (TextUtils.containsIgnoreCase(fileName, "driver")) {
+            // NOTE: check "driver" first - "appliance-driver.groovy" contains both
+            if (TextUtils.containsIgnoreCase(fileName, "driver")) {
                 log.debug("isApp: filename is driver: {}", fileName);
                 details.isApp = false;
+            } else if (TextUtils.containsIgnoreCase(fileName, "app")) {
+                log.debug("isApp: filename is app: {}", fileName);
+                details.isApp = true;
             }
         }
 
@@ -117,7 +143,8 @@ public class HubitatAction extends AnAction {
             if (details.isApp == null) {
                 // check if we cached this path -> app/driver type
                 details.isApp = state.getPathToApp(filePath);
-                if (details.isApp != null) log.debug("actionPerformed: cached isApp: {} -> {}", filePath, details.isApp);
+                if (details.isApp != null)
+                    log.debug("actionPerformed: cached isApp: {} -> {}", filePath, details.isApp);
             }
         }
 
@@ -134,6 +161,8 @@ public class HubitatAction extends AnAction {
             }
             details.hubIp = selectedIp;
             details.isApp = selectedIsApp;
+            // new session (cookie store) per install; the hub IP may have changed
+            details.networkHelper = new NetworkHelper();
 
             if (state != null) {
                 // save IP address for future use
@@ -142,10 +171,9 @@ public class HubitatAction extends AnAction {
                 state.setPathToApp(filePath, selectedIsApp);
             }
 
-            String type = (selectedIsApp ? "app" : "driver");
             // get app/driver id from comments:
             // id: 1711
-            String idStr = parseValue(details.text, "id");
+            String idStr = parseComment(details.text, "id");
             if (TextUtils.notEmpty(idStr)) {
                 int id = TextUtils.getNumberInt(idStr, 0);
                 if (id > 0) details.appId = id;
@@ -174,7 +202,13 @@ public class HubitatAction extends AnAction {
      * @return true = app, false = device driver, null = unknown/cancel
      */
     private Boolean isApp(String text) {
-        String type = parseValue(text, "type");
+        // look for Hubitat header (optional):
+        // hubitat start
+        // hub: 192.168.0.200
+        // type: app
+        // id: 684
+        // hubitat end
+        String type = parseComment(text, "type");
         if (TextUtils.equalsIgnoreCase(type, "app")) {
             log.debug("isApp: type=app");
             return true;
@@ -184,14 +218,16 @@ public class HubitatAction extends AnAction {
         }
 
         // Driver: Contains a metadata block with definition, and usually declares capability, attribute, and command.
+        // capability "Actuator"
         // App: Contains a definition block (not inside metadata), and often uses app, section, and input for user configuration.
         //   - Apps do not use the capability keyword
-        if (TextUtils.containsAny(text, true, "capability", "metadata")) {
+        //
+        if (DRIVER_PATTERN.matcher(text).find()) {
             // drivers contain capability/metadata keywords
-            log.debug("isApp: type=app (capability/metadata)");
+            log.debug("isApp: type=device (capability/metadata)");
             return false;
-        } else if (TextUtils.containsAny(text, true, "definition", "section", "page")) {
-            log.debug("isApp: type=app (definition/etc)");
+        } else if (APP_PATTERN.matcher(text).find()) {
+            log.debug("isApp: type=app (section/page)");
             return true;
         }
         // unknown
@@ -209,8 +245,8 @@ public class HubitatAction extends AnAction {
 
         String type = details.isApp ? "/app" : "/driver";
         String createUrl = "http://" + details.hubIp + type + "/create";
-        if (networkHelper == null) networkHelper = new NetworkHelper();
-        networkHelper.getRequest(createUrl, getHeaders(details));
+        // NOTE: this GET is what hands us the HUBSESSION cookie used by the POST below
+        details.networkHelper.getRequest(createUrl, getHeaders(details));
 
         // install new app/driver
         // POST http://192.168.0.200/driver/saveOrUpdateJson
@@ -230,33 +266,31 @@ public class HubitatAction extends AnAction {
         InstallRequest request = new InstallRequest();
         request.source = details.text;
 
-        NetworkHelper.HttpResponse response = networkHelper.postRequest(urlStr, GsonHelper.toJson(request), headers);
+        NetworkHelper.HttpResponse response = details.networkHelper.postRequest(urlStr, GsonHelper.toJson(request), headers);
         return handleResult(dialog, response);
     }
 
     private boolean updateApp(HubitatInstallDialog dialog, DriverDetails details) {
         String type = details.isApp ? "/app" : "/device";
-        dialog.addResult("\uD83D\uDD39 Updating " + (details.isApp ? "app" : "device") + " on Hubitat...");
+        dialog.addResult("\uD83D\uDD39 Updating " + typeName(details) + " on Hubitat...");
 
         // POST /device/ideUpdate?id=885 HTTP/1.1
         String urlStr = "http://" + details.hubIp + type + "/ideUpdate?id=" + details.appId;
-        if (networkHelper == null) networkHelper = new NetworkHelper();
         Map<String, String> headers = getHeaders(details);
-        NetworkHelper.HttpResponse response = networkHelper.postRequest(urlStr, details.text, headers);
+        NetworkHelper.HttpResponse response = details.networkHelper.postRequest(urlStr, details.text, headers);
         return handleResult(dialog, response);
     }
 
     private boolean handleResult(HubitatInstallDialog dialog, NetworkHelper.HttpResponse response) {
         if (response.status != 200) {
-            dialog.addResult("❌ " + response.body);
-            dialog.done();
+            showError(dialog, response);
             return false;
         }
         InstallResult result = GsonHelper.fromJson(response.body, InstallResult.class);
         if (result == null || !result.success) {
             String errorMsg = (result == null) ? "Unknown error" : result.message;
             dialog.addResult("❌ Error: " + errorMsg);
-            dialog.done();
+            dialog.failed();
             return false;
         }
 
@@ -275,14 +309,13 @@ public class HubitatAction extends AnAction {
         // http://192.168.0.200/hub2/userAppTypes
         String urlStr = "http://" + details.hubIp + "/hub2/" + (details.isApp ? "userAppTypes" : "userDeviceTypes");
 
-        String type = (details.isApp ? "app" : "driver");
+        String type = typeName(details);
         dialog.addResult("\uD83D\uDD39 Looking up " + type + " ID for \"" + details.name + "\"...");
 
-        if (networkHelper == null) networkHelper = new NetworkHelper();
         Map<String, String> headers = getHeaders(details);
-        NetworkHelper.HttpResponse response = networkHelper.getRequest(urlStr, headers);
+        NetworkHelper.HttpResponse response = details.networkHelper.getRequest(urlStr, headers);
         if (response.status != 200) {
-            dialog.addResult("❌ " + response.body);
+            showError(dialog, response);
             return false;
         }
 
@@ -297,7 +330,7 @@ public class HubitatAction extends AnAction {
         //    },
         for (UserDeviceType deviceType : deviceTypeList) {
             if (TextUtils.equals(deviceType.name, details.name) &&
-                TextUtils.equals(deviceType.namespace, details.namespace)) {
+                    TextUtils.equals(deviceType.namespace, details.namespace)) {
                 dialog.addResult("\uD83D\uDD39 Found " + type + " ID: " + deviceType.id);
                 log.info("lookupAppId: FOUND: {}", GsonHelper.toJson(deviceType));
                 details.appId = deviceType.id;
@@ -313,6 +346,17 @@ public class HubitatAction extends AnAction {
         return true;
     }
 
+    private String typeName(DriverDetails details) {
+        return details.isApp ? "app" : "driver";
+    }
+
+    private void showError(HubitatInstallDialog dialog, NetworkHelper.HttpResponse response) {
+        // NOTE: body is null when the hub replies with no content (eg. a 302 redirect to the login page)
+        String error = TextUtils.notEmpty(response.body) ? response.body : "HTTP " + response.status;
+        dialog.addResult("❌ " + error);
+        dialog.failed();
+    }
+
     private Map<String, String> getHeaders(DriverDetails details) {
         Map<String, String> headers = new HashMap<>();
         headers.put("Content-Type", "text/plain; charset=ISO-8859-1");
@@ -323,44 +367,132 @@ public class HubitatAction extends AnAction {
         return headers;
     }
 
-    private String parseValue(String text, String key) {
-        // hub: 192.168.0.200
-        // type: device
-        // id: 1711
-        // definition(name: "File Manager Device", namespace: "jpage4500", author: "Joe Page") {
-        // definition(
-        //    name: "File Manager Album",
-        //    namespace: "jpage4500",
-        //    oauth: true,
-        //    iconUrl: '',
-        String fullKey = key + ": ";
-        int index = text.indexOf(fullKey);
-        if (index < 0) return null;
-        int start = index + fullKey.length();
-        StringBuilder result = new StringBuilder();
-        for (int i = start; i < text.length(); i++) {
+    /**
+     * Find the contents of the definition(..) block - both apps and drivers have one:
+     * <p>
+     * metadata { definition(name: "x", namespace: "y") { .. } }   <- driver
+     * definition(name: "x", namespace: "y")                       <- app
+     *
+     * @return text *between* the parenthesis or null if not found
+     */
+    private String parseDefinition(String text) {
+        if (TextUtils.isEmpty(text)) return null;
+        Matcher matcher = DEFINITION_PATTERN.matcher(text);
+        while (matcher.find()) {
+            // matcher ends on the '(' itself
+            int openIndex = matcher.end() - 1;
+            int closeIndex = findClosingParen(text, openIndex);
+            if (closeIndex < 0) continue;
+            String definition = text.substring(openIndex + 1, closeIndex);
+            // skip any definition(..) that doesn't declare a name (eg. commented out sample code)
+            if (TextUtils.contains(definition, "name")) return definition;
+        }
+        log.debug("parseDefinition: not found");
+        return null;
+    }
+
+    /**
+     * @return index of the ')' matching the '(' at openIndex or -1; ignores parenthesis inside quotes
+     */
+    private static int findClosingParen(String text, int openIndex) {
+        int depth = 0;
+        char quote = 0;
+        for (int i = openIndex; i < text.length(); i++) {
             char c = text.charAt(i);
+            if (quote != 0) {
+                // inside a string - only look for the closing quote
+                if (c == '\\') i++;
+                else if (c == quote) quote = 0;
+                continue;
+            }
             switch (c) {
                 case '\"':
                 case '\'':
-                    continue;
-                case '\n':
-                case ',':
+                    quote = c;
+                    break;
+                case '(':
+                    depth++;
+                    break;
                 case ')':
-                    // remove spaces from beginning/end
-                    String resultStr = result.toString().trim();
-                    log.debug("parseValue: " + key + " = \"" + resultStr + "\"");
-                    return resultStr;
-                default:
-                    result.append(c);
-                    if (result.length() > 256) {
-                        log.error("parseValue: " + key + " exceeded max length");
-                        break;
-                    }
+                    depth--;
+                    if (depth == 0) return i;
+                    break;
             }
         }
-        log.debug("parseValue: {} = \"{}\"", key, result);
+        return -1;
+    }
+
+    /**
+     * Look up a value the user added in a comment (hub, type, id):
+     * <p>
+     * // hubitat start
+     * // hub: 192.168.0.200
+     * // type: device
+     * // id: 1782
+     * // hubitat end
+     * <p>
+     * NOTE: only comments are searched so we never pick up a value from code (eg. "[id: 5]")
+     */
+    private String parseComment(String text, String key) {
+        if (TextUtils.isEmpty(text)) return null;
+
+        // prefer the "hubitat start/end" block when it exists
+        int startIndex = TextUtils.indexOf(text, "hubitat start");
+        if (startIndex >= 0) {
+            int endIndex = text.indexOf("hubitat end", startIndex);
+            if (endIndex < 0) endIndex = text.length();
+            return parseValue(text.substring(startIndex, endIndex), key);
+        }
+
+        for (String line : text.split("\n")) {
+            String trimmed = line.trim();
+            if (!TextUtils.startsWithAny(trimmed, false, "//", "*", "/*")) continue;
+            String value = parseValue(trimmed, key);
+            if (value != null) return value;
+        }
+        log.debug("parseComment: key not found: {}", key);
         return null;
+    }
+
+    /**
+     * Find "key: value" within the given text; handles quoted and unquoted values
+     * <p>
+     * name: "File Manager Device",   ->  File Manager Device
+     * name: 'go2rtc',                ->  go2rtc
+     * // id: 1782                    ->  1782
+     *
+     * @param text scope to search - NOT the entire file (see parseDefinition/parseComment)
+     */
+    private String parseValue(String text, String key) {
+        if (TextUtils.isEmpty(text)) return null;
+        Matcher matcher = keyPattern(key).matcher(text);
+        while (matcher.find()) {
+            String value = matcher.group(1);
+            if (value == null) continue;
+            value = value.trim();
+            // remove surrounding quotes
+            if (value.length() >= 2 && (value.charAt(0) == '\"' || value.charAt(0) == '\'')) {
+                value = value.substring(1, value.length() - 1).trim();
+            }
+            if (TextUtils.isEmpty(value)) continue;
+            if (value.length() > MAX_VALUE_LENGTH) {
+                log.error("parseValue: {} exceeded max length: {}", key, value.length());
+                return null;
+            }
+            log.debug("parseValue: {} = \"{}\"", key, value);
+            return value;
+        }
+        log.debug("parseValue: key not found: {}", key);
+        return null;
+    }
+
+    /**
+     * matches: <key>: "value" | 'value' | value
+     * NOTE: the lookbehind stops "name" from matching "fileName:" or "displayName:"
+     */
+    private static Pattern keyPattern(String key) {
+        return keyPatternMap.computeIfAbsent(key, k -> Pattern.compile(
+                "(?<![A-Za-z0-9_])" + Pattern.quote(k) + "\\s*:[ \\t]*(\"[^\"]*\"|'[^']*'|[^,)\\r\\n]*)"));
     }
 
     private void showWarning(Project project, String message) {
@@ -375,10 +507,10 @@ public class HubitatAction extends AnAction {
         if (ip == null || ip.isEmpty()) return false;
         // IPv4 regex
         String ipv4Pattern =
-            "^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\." +
-                "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\." +
-                "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\." +
-                "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$";
+                "^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\." +
+                        "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\." +
+                        "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\." +
+                        "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$";
         return ip.matches(ipv4Pattern);
     }
 

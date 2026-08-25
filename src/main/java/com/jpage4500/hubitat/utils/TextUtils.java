@@ -135,6 +135,7 @@ public class TextUtils {
     }
 
     public static boolean endsWithIgnoreCase(String src, String endsWith) {
+        if (src == null || endsWith == null) return false;
         int suffixLength = endsWith.length();
         return src.regionMatches(true, src.length() - suffixLength, endsWith, 0, suffixLength);
     }
@@ -162,7 +163,7 @@ public class TextUtils {
                     if (isFound) return true;
                 }
             } else {
-                if (str.startsWith(str)) return true;
+                if (message.startsWith(str)) return true;
             }
         }
         return false;

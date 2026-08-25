@@ -1,5 +1,8 @@
 package com.jpage4500.hubitat.settings;
 
+import com.intellij.openapi.application.Application;
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.jpage4500.hubitat.utils.TextUtils;
@@ -123,31 +126,57 @@ public class HubitatInstallDialog extends DialogWrapper {
         else return null;
     }
 
+    /**
+     * NOTE: results are posted from a background thread; Swing must only be touched on the EDT
+     * ModalityState.any() is required or updates won't run while this (modal) dialog is showing
+     */
+    private void onEdt(Runnable runnable) {
+        Application application = ApplicationManager.getApplication();
+        if (application.isDispatchThread()) runnable.run();
+        else application.invokeLater(runnable, ModalityState.any());
+    }
+
     public void setResult(String text) {
-        resultsArea.setText(text);
+        onEdt(() -> resultsArea.setText(text));
     }
 
     public void addResult(String text) {
-        String results = resultsArea.getText();
-        if (!TextUtils.isEmpty(results)) {
-            results += "\n";
-        }
-        results += text;
-        resultsArea.setText(results);
+        onEdt(() -> {
+            String results = resultsArea.getText();
+            if (!TextUtils.isEmpty(results)) {
+                results += "\n";
+            }
+            results += text;
+            resultsArea.setText(results);
+            // keep the newest line visible
+            resultsArea.setCaretPosition(resultsArea.getDocument().getLength());
+        });
     }
 
     public void install() {
         doOKAction();
     }
 
+    /**
+     * install finished successfully - nothing left to do but close
+     */
     public void done() {
-        setOKButtonText("Close");
-        setOKActionEnabled(true);
-        JButton cancelButton = getButton(getCancelAction());
-        if (cancelButton != null) {
-            cancelButton.setVisible(false);
-        }
-        listener = null;
+        onEdt(() -> {
+            setOKButtonText("Close");
+            setOKActionEnabled(true);
+            JButton cancelButton = getButton(getCancelAction());
+            if (cancelButton != null) {
+                cancelButton.setVisible(false);
+            }
+            listener = null;
+        });
+    }
+
+    /**
+     * install failed - re-enable Install so the user can fix the IP/type and retry
+     */
+    public void failed() {
+        onEdt(() -> setOKActionEnabled(true));
     }
 
     @Override
