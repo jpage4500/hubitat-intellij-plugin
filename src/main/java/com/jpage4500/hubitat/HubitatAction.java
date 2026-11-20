@@ -312,6 +312,8 @@ public class HubitatAction extends AnAction {
                 details.appId = deviceType.id;
                 updateApp(dialog, details);
                 return true;
+            } {
+                log.trace("lookupAppId: no match: {}", GsonHelper.toJson(deviceType));
             }
         }
         dialog.addResult("❌ \"" + details.name + "\" not found");
