@@ -4,6 +4,25 @@
     <version>1.0.0</version>
     <vendor email="jpage4500@gmail.com">Joe Page</vendor>
 
+    <description><![CDATA[
+    Install or update Hubitat Elevation apps and device drivers directly from the editor.
+    <p>
+    Open a Hubitat Groovy app or driver and click <b>Install</b> in the toolbar. The plugin uploads the
+    file to your hub over your local network:
+    </p>
+    <ul>
+        <li>Updates an existing app or driver, looking up its ID on the hub by name and namespace</li>
+        <li>Installs a new app or driver if it doesn't exist on the hub yet</li>
+        <li>Detects whether the file is an app or a driver, and remembers your hub IP and choice per file</li>
+        <li>No changes to your code required. Optionally add <code>// hub:</code>, <code>// type:</code> and
+            <code>// id:</code> comments to skip the prompts</li>
+    </ul>
+    <p>
+    This is an unofficial community plugin and is not affiliated with or endorsed by Hubitat, Inc.
+    Source and docs: <a href="https://github.com/jpage4500/hubitat-intellij-plugin">GitHub</a>
+    </p>
+    ]]></description>
+
     <depends>com.intellij.modules.platform</depends>
 
     <extensions defaultExtensionNs="com.intellij">
