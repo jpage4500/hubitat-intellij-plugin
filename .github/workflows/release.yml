@@ -15,6 +15,9 @@ on:
 jobs:
   build_app:
     runs-on: ubuntu-latest
+    permissions:
+      # needed to create the GitHub release (the default GITHUB_TOKEN is read-only)
+      contents: write
     env:
       # job-level so the publish step's `if` can see it (a step's own env isn't visible to its `if`)
       PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}

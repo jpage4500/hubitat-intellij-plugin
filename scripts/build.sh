@@ -1,9 +1,17 @@
-cd ..
+#!/bin/bash
+# Builds the distributable plugin zip (what gets uploaded to JetBrains Marketplace / installed from disk)
+# and moves it to ~/Downloads.
+set -e
 
-# remove all existing jar files
-echo "removing existing jar files"
-rm build/libs/*.jar
+cd "$(dirname "$0")/.."
 
-gradlew build
+# remove previous builds so only the new zip is picked up
+echo "removing existing plugin zips"
+rm -f build/distributions/*.zip
 
-cp build/libs/*.jar ~/Downloads
+./gradlew buildPlugin
+
+ZIP=$(ls build/distributions/hubitat-intellij-plugin-*.zip)
+mv "$ZIP" ~/Downloads/
+echo ""
+echo "plugin zip: $HOME/Downloads/$(basename "$ZIP")"

@@ -16,8 +16,9 @@ there is no official API — so requests imitate a browser/HttpClient (cookies, 
 ./gradlew buildPlugin        # distributable zip in build/distributions/
 ```
 
-`scripts/build.sh` and `scripts/run.sh` are thin wrappers (they `rm build/libs/*.jar` first and call `gradlew`, not
-`./gradlew` — assumes a `gradlew` on PATH).
+`scripts/build.sh` runs `./gradlew buildPlugin` and moves the resulting zip to `~/Downloads` (this zip, not the bare
+jar in `build/libs`, is what gets installed from disk or uploaded to Marketplace — it bundles Gson). `scripts/run.sh`
+is a thin wrapper that calls `gradlew`, not `./gradlew` (assumes a `gradlew` on PATH).
 
 There are **no tests** in this repo (`src/test` does not exist) and no lint task beyond `javac`.
 
@@ -32,7 +33,9 @@ machine's IDE version).
 
 `version` is generated in `build.gradle` from the build timestamp (`yy.M.d-Hmm`) — do not hand-edit it. Pushing to
 `main` triggers `.github/workflows/release.yml`, which builds, reads the version from `gradlew properties`, and
-creates a GitHub release with `build/libs/hubitat-intellij-plugin-*.jar`.
+creates a GitHub release with `build/distributions/hubitat-intellij-plugin-*.zip`. CI passes `-PpluginVersion=...` so
+every gradle invocation uses one version. If the `PUBLISH_TOKEN` secret is set, it also runs `publishPlugin` to
+JetBrains Marketplace.
 
 `sinceBuild`/`untilBuild` (233.0–299.*) and the target IDE version live in `build.gradle`'s `intellij`/`patchPluginXml`
 blocks, not in `plugin.xml`.
