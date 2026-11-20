@@ -36,10 +36,12 @@ tasks {
     patchPluginXml {
         changeNotes = "Initial release"
         sinceBuild = '233.0'
-        untilBuild = '299.*'
+        // no upper bound: compatible with all future IDE versions (a fake cap like '299.*' triggers a
+        // Marketplace warning; null is required because the gradle plugin otherwise defaults to '<since>.*')
+        untilBuild = provider { null }
     }
     publishPlugin {
         // JetBrains Marketplace token (https://plugins.jetbrains.com/author/me/tokens)
-        token = System.getenv('PUBLISH_TOKEN')
+        token = System.getenv('JETBRAINS_PUBLISH_TOKEN')
     }
 }

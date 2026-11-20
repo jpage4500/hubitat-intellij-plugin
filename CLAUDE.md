@@ -34,10 +34,10 @@ machine's IDE version).
 `version` is generated in `build.gradle` from the build timestamp (`yy.M.d-Hmm`) — do not hand-edit it. Pushing to
 `main` triggers `.github/workflows/release.yml`, which builds, reads the version from `gradlew properties`, and
 creates a GitHub release with `build/distributions/hubitat-intellij-plugin-*.zip`. CI passes `-PpluginVersion=...` so
-every gradle invocation uses one version. If the `PUBLISH_TOKEN` secret is set, it also runs `publishPlugin` to
+every gradle invocation uses one version. If the `JETBRAINS_PUBLISH_TOKEN` secret is set, it also runs `publishPlugin` to
 JetBrains Marketplace.
 
-`sinceBuild`/`untilBuild` (233.0–299.*) and the target IDE version live in `build.gradle`'s `intellij`/`patchPluginXml`
+`sinceBuild` (233.0; `untilBuild` is deliberately unset — no upper bound) and the target IDE version live in `build.gradle`'s `intellij`/`patchPluginXml`
 blocks, not in `plugin.xml`.
 
 ## Architecture
