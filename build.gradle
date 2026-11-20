@@ -5,9 +5,9 @@ plugins {
 
 group 'com.jpage4500'
 
-def now = new Date()
-def versionFormat = now.format('yy.M.d-Hmm')
-version = versionFormat
+// generated from the build timestamp; CI passes -PpluginVersion=... so every gradle invocation in a
+// release (build, GitHub release tag, Marketplace publish) uses the same value
+version = findProperty('pluginVersion') ?: new Date().format('yy.M.d-Hmm')
 
 repositories {
     mavenCentral()
@@ -37,5 +37,9 @@ tasks {
         changeNotes = "Initial release"
         sinceBuild = '233.0'
         untilBuild = '299.*'
+    }
+    publishPlugin {
+        // JetBrains Marketplace token (https://plugins.jetbrains.com/author/me/tokens)
+        token = System.getenv('PUBLISH_TOKEN')
     }
 }

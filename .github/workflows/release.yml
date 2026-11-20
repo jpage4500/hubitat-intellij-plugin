@@ -15,6 +15,9 @@ on:
 jobs:
   build_app:
     runs-on: ubuntu-latest
+    env:
+      # job-level so the publish step's `if` can see it (a step's own env isn't visible to its `if`)
+      PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
 
     steps:
       - uses: actions/checkout@v4
@@ -28,14 +31,15 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Build with Gradle
-        run: ./gradlew build
+      # computed once (same format as build.gradle's default) and passed to every gradle call, so the
+      # zip, the release tag and the Marketplace version all match
+      - name: Set Plugin Version
+        run: echo "PLUGIN_VERSION=$(date -u +'%y.%-m.%-d-%-H%M')" >> $GITHUB_ENV
 
-      - name: Get Plugin Version
-        id: get_version
-        run: |
-          VERSION=$(./gradlew properties -q | grep "^version:" | awk '{print $2}')
-          echo "PLUGIN_VERSION=$VERSION" >> $GITHUB_ENV
+      # buildPlugin produces build/distributions/*.zip, which bundles runtime dependencies (Gson);
+      # the bare jar in build/libs does not
+      - name: Build with Gradle
+        run: ./gradlew buildPlugin -PpluginVersion=$PLUGIN_VERSION
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -43,8 +47,13 @@ jobs:
           tag_name: v${{ env.PLUGIN_VERSION }}
           generate_release_notes: true
           files: |
-            build/libs/hubitat-intellij-plugin-*.jar
+            build/distributions/hubitat-intellij-plugin-*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+
+      # skipped until the PUBLISH_TOKEN repo secret exists (the first Marketplace upload must be manual)
+      - name: Publish to JetBrains Marketplace
+        if: env.PUBLISH_TOKEN != ''
+        run: ./gradlew publishPlugin -PpluginVersion=$PLUGIN_VERSION
 
   #endjob build_app
