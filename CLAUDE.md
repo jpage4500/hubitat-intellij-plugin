@@ -20,6 +20,14 @@ there is no official API — so requests imitate a browser/HttpClient (cookies, 
 jar in `build/libs`, is what gets installed from disk or uploaded to Marketplace — it bundles Gson). `scripts/run.sh`
 is a thin wrapper that calls `gradlew`, not `./gradlew` (assumes a `gradlew` on PATH).
 
+**Gradle must not run on a Microsoft OpenJDK build** (`ms-17.*`, which IntelliJ offers to download): `instrumentCode`
+runs Ant's `Javac2`, and Ant has a legacy code path for vendor "Microsoft" that fails with
+`<java.home>/Packages does not exist`. It only shows up when Java sources changed (otherwise the task is up to date).
+Point `JAVA_HOME` / IntelliJ's *Gradle JVM* at JBR, Temurin, etc. CI (Temurin) is unaffected.
+
+`scripts/change-notes.sh` prints the HTML "What's New" from commit subjects since the previous release tag; CI passes it
+via `-PchangeNotesFile=...`. Commit subjects therefore become user-visible release notes.
+
 There are **no tests** in this repo (`src/test` does not exist) and no lint task beyond `javac`.
 
 ### Debugging

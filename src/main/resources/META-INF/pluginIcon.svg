@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+  <defs>
+    <mask id="cutout">
+      <rect width="40" height="40" fill="#fff"/>
+      <!-- upload arrow and base stripe are cut out (transparent), matching logo.png -->
+      <path d="M20 8.6 L29.8 18.8 L24.1 18.8 L24.1 31.6 L15.9 31.6 L15.9 18.8 L10.2 18.8 Z" fill="#000"/>
+      <rect x="0" y="31.6" width="40" height="2.2" fill="#000"/>
+    </mask>
+  </defs>
+  <rect x="1" y="3" width="38" height="34" rx="4.5" fill="#7CB138" mask="url(#cutout)"/>
+</svg>

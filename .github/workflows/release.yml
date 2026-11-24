@@ -24,6 +24,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # full history + tags: scripts/change-notes.sh diffs against the previous release tag
+          fetch-depth: 0
 
       - uses: actions/setup-java@v4
         with:
@@ -39,10 +42,17 @@ jobs:
       - name: Set Plugin Version
         run: echo "PLUGIN_VERSION=$(date -u +'%y.%-m.%-d-%-H%M')" >> $GITHUB_ENV
 
+      # "What's New" on Marketplace / in the IDE: commit subjects since the previous release
+      - name: Generate Change Notes
+        run: |
+          scripts/change-notes.sh > "$RUNNER_TEMP/change-notes.html"
+          cat "$RUNNER_TEMP/change-notes.html"
+          echo "CHANGE_NOTES_FILE=$RUNNER_TEMP/change-notes.html" >> $GITHUB_ENV
+
       # buildPlugin produces build/distributions/*.zip, which bundles runtime dependencies (Gson);
       # the bare jar in build/libs does not
       - name: Build with Gradle
-        run: ./gradlew buildPlugin -PpluginVersion=$PLUGIN_VERSION
+        run: ./gradlew buildPlugin -PpluginVersion=$PLUGIN_VERSION -PchangeNotesFile=$CHANGE_NOTES_FILE
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -57,6 +67,6 @@ jobs:
       # skipped until the JETBRAINS_PUBLISH_TOKEN repo secret exists (the first Marketplace upload must be manual)
       - name: Publish to JetBrains Marketplace
         if: env.JETBRAINS_PUBLISH_TOKEN != ''
-        run: ./gradlew publishPlugin -PpluginVersion=$PLUGIN_VERSION
+        run: ./gradlew publishPlugin -PpluginVersion=$PLUGIN_VERSION -PchangeNotesFile=$CHANGE_NOTES_FILE
 
   #endjob build_app
