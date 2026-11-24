@@ -1,6 +1,9 @@
 # hubitat-intellij-plugin
 <img src="logo.png" width="100"/>
 
+[![JetBrains Marketplace](https://img.shields.io/jetbrains/plugin/v/36340?label=JetBrains%20Marketplace)](https://plugins.jetbrains.com/plugin/36340-install-to-hubitat-hub)
+[![Downloads](https://img.shields.io/jetbrains/plugin/d/36340)](https://plugins.jetbrains.com/plugin/36340-install-to-hubitat-hub)
+
 ## An IntelliJ plugin for Hubitat app/driver developers
 
 ## Features
@@ -14,10 +17,22 @@
 <img src="docs/screenshot_error.png" width="300"/>
 
 ## Install
-- Download the latest release from Github [Releases](https://github.com/jpage4500/hubitat-intellij-plugin/releases)
-- Install the plugin in IntelliJ (see [link](https://www.jetbrains.com/help/idea/managing-plugins.html#install_plugin_from_disk) for details)
+Works in IntelliJ IDEA and other JetBrains IDEs (2023.3 or newer).
+
+- In the IDE, open **Settings → Plugins → Marketplace**, search for **Hubitat**, and install **Install to Hubitat Hub**
+  - or install it from the [JetBrains Marketplace page](https://plugins.jetbrains.com/plugin/36340-install-to-hubitat-hub)
+- Updates are offered automatically through the IDE
 - An icon should show up in the toolbar automatically after install
 - IF not, add the action to your toolbar (see below)
+
+<details>
+  <summary>Install manually from disk</summary>
+
+- Download the latest `.zip` from Github [Releases](https://github.com/jpage4500/hubitat-intellij-plugin/releases)
+- In the IDE: **Settings → Plugins → ⚙️ → Install Plugin from Disk…** and pick the zip
+  (see [JetBrains docs](https://www.jetbrains.com/help/idea/managing-plugins.html#install_plugin_from_disk))
+
+</details>
 
 <details>
   <summary>Add action to toolbar</summary>

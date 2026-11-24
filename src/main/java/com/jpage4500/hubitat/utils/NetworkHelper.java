@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -31,7 +32,7 @@ public class NetworkHelper {
     public HttpResponse getRequest(String urlStr, Map<String, String> headers) {
         HttpResponse response = new HttpResponse();
         try {
-            URL url = new URL(urlStr);
+            URL url = URI.create(urlStr).toURL();
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
             conn.setConnectTimeout(5000);
@@ -88,7 +89,7 @@ public class NetworkHelper {
     public HttpResponse postRequest(String urlStr, String body, Map<String, String> headers) {
         HttpResponse response = new HttpResponse();
         try {
-            URL url = new URL(urlStr);
+            URL url = URI.create(urlStr).toURL();
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setInstanceFollowRedirects(false);
